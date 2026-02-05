@@ -664,10 +664,12 @@ def main():
     with col1:
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
         st.markdown("**Regime score (0–100)**")
+        global_score_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
         st.markdown(
-            f"<div class='big-number'>{global_score:.1f if not np.isnan(global_score) else 'n/a'}</div>",
+            f"<div class='big-number'>{global_score_txt}</div>",
             unsafe_allow_html=True,
         )
+
         st.markdown(
             f"<div class='sub-number'>{status_emoji(global_status)} {status_label_it(global_status)}</div>",
             unsafe_allow_html=True,
@@ -779,7 +781,9 @@ def main():
                 )
                 st.write(
                     f"{status_emoji(status)} {status_label_it(status)} "
-                    f"(score {score:.1f if not np.isnan(score) else 'n/a'})"
+                    score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
+                    st.write(f"{status_emoji(status)} {status_label_it(status)} (score {score_txt})")
+
                 )
 
             # Grafico
