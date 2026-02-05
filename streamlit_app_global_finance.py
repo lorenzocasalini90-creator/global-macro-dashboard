@@ -53,6 +53,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,  # alto = risk-off
         "source": "FRED DFII10",
+        "scale": 1.0,
         "expander": {
             "what": "Rendimento reale (al netto dell'inflazione attesa) sui Treasury USA a 10 anni (TIPS).",
             "reference": "Area <0% = condizioni molto accomodanti; 0–2% = zona neutrale; >2% = condizioni restrittive.",
@@ -67,6 +68,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,
         "source": "FRED DGS10",
+        "scale": 1.0,
         "expander": {
             "what": "Rendimento nominale sui Treasury USA a 10 anni.",
             "reference": "Tipicamente 2–4% in fasi 'normali'; spike rapidi verso l'alto spesso associati a shock di policy / inflazione.",
@@ -81,6 +83,7 @@ INDICATOR_META = {
         "unit": "pp",
         "direction": +1,  # curva più ripida = più risk-on
         "source": "DGS10 - DGS2",
+        "scale": 1.0,
         "expander": {
             "what": "Differenza tra rendimento Treasury 10Y e 2Y (curva dei rendimenti).",
             "reference": "Spread >0: curva 'normale'; spread <0: curva invertita, spesso segnale di recessione futura.",
@@ -97,6 +100,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,  # inflazione attesa alta = rischio restrizione
         "source": "FRED T10YIE",
+        "scale": 1.0,
         "expander": {
             "what": "Inflazione media attesa dal mercato per i prossimi 10 anni, derivata da nominali vs TIPS.",
             "reference": "Circa 2–3% = inflazione 'ben ancorata'; >>3% = rischio inflazione elevata/persistente.",
@@ -111,6 +115,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,
         "source": "FRED CPIAUCSL (YoY)",
+        "scale": 1.0,
         "expander": {
             "what": "Inflazione headline USA anno su anno.",
             "reference": "2% target Fed; valori >3–4% per lungo tempo indicano inflazione 'sticky'.",
@@ -125,6 +130,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,
         "source": "FRED UNRATE",
+        "scale": 1.0,
         "expander": {
             "what": "Tasso di disoccupazione USA.",
             "reference": "Minimi storici ~3–4%; aumenti rapidi spesso precedono/seguono recessioni.",
@@ -141,6 +147,7 @@ INDICATOR_META = {
         "unit": "",
         "direction": -1,  # USD forte = condizioni più strette
         "source": "yfinance DX-Y.NYB",
+        "scale": 1.0,
         "expander": {
             "what": "Indice del dollaro USA contro principali valute (proxy condizioni finanziarie globali).",
             "reference": "Trend forte e persistente del USD spesso coincide con fasi di stress o tightening globale.",
@@ -155,6 +162,7 @@ INDICATOR_META = {
         "unit": "pp",
         "direction": -1,
         "source": "FRED BAMLH0A0HYM2",
+        "scale": 1.0,
         "expander": {
             "what": "Spread opzionale aggiustato dei corporate bond High Yield USA vs Treasury.",
             "reference": "Spread bassi (es. <400 bps) = risk appetite; spike sopra 600–700 bps = stress significativo.",
@@ -169,6 +177,7 @@ INDICATOR_META = {
         "unit": "bn USD",
         "direction": +1,  # bilancio più grande = più liquidità
         "source": "FRED WALCL",
+        "scale": 1.0 / 1000.0,  # WALCL è in milioni USD -> bn USD
         "expander": {
             "what": "Totale attivi della Federal Reserve (dimensione del bilancio).",
             "reference": "Trend di espansione spesso associato a programmi di QE/liquidità straordinaria.",
@@ -183,6 +192,7 @@ INDICATOR_META = {
         "unit": "bn USD",
         "direction": -1,  # più RRP = più liquidità parcheggiata
         "source": "FRED RRPONTSYD",
+        "scale": 1.0,  # RRPONTSYD è già in bn USD
         "expander": {
             "what": "Volume di Reverse Repo overnight della Fed (liquidità parcheggiata in strumenti risk-free).",
             "reference": "Valori elevati indicano molta liquidità 'ferma' fuori dai mercati di rischio.",
@@ -199,6 +209,7 @@ INDICATOR_META = {
         "unit": "",
         "direction": -1,
         "source": "yfinance ^VIX",
+        "scale": 1.0,
         "expander": {
             "what": "Volatilità implicita a 30 giorni sull'S&P 500.",
             "reference": "VIX <15 = bassa volatilità; 15–25 = normale; >25–30 = stress; >40 = panic.",
@@ -213,6 +224,7 @@ INDICATOR_META = {
         "unit": "ratio",
         "direction": +1,
         "source": "yfinance SPY",
+        "scale": 1.0,
         "expander": {
             "what": "Rapporto tra prezzo di SPY e sua media mobile a 200 giorni (proxy di trend di lungo periodo).",
             "reference": "Valori >1 indicano trend rialzista di lungo periodo; <1 trend ribassista.",
@@ -227,6 +239,7 @@ INDICATOR_META = {
         "unit": "ratio",
         "direction": +1,
         "source": "yfinance HYG, LQD",
+        "scale": 1.0,
         "expander": {
             "what": "Rapporto tra ETF High Yield (HYG) e Investment Grade (LQD).",
             "reference": "Ratio in salita = HY che sovraperforma IG; ratio in calo = fuga verso qualità IG.",
@@ -243,6 +256,7 @@ INDICATOR_META = {
         "unit": "",
         "direction": +1,
         "source": "yfinance URTH",
+        "scale": 1.0,
         "expander": {
             "what": "ETF su MSCI World (o equivalente), proxy del risk-on globale.",
             "reference": "Trend di prezzo e drawdown forniscono il contesto globale oltre l'S&P 500.",
@@ -255,8 +269,9 @@ INDICATOR_META = {
     "duration_proxy_tlt": {
         "label": "US long Treasuries (TLT)",
         "unit": "",
-        "direction": -1,  # rally TLT spesso in fasi di stress (flight to quality)
+        "direction": -1,  # rally TLT spesso in fasi di stress
         "source": "yfinance TLT",
+        "scale": 1.0,
         "expander": {
             "what": "ETF su Treasury USA a lunga duration.",
             "reference": "Rally forti e improvvisi spesso coincidono con flight-to-quality / tagli tassi.",
@@ -269,8 +284,9 @@ INDICATOR_META = {
     "gold": {
         "label": "Gold (GLD)",
         "unit": "",
-        "direction": -1,  # oro forte spesso in stress / inflazione / geopolitica
+        "direction": -1,
         "source": "yfinance GLD",
+        "scale": 1.0,
         "expander": {
             "what": "ETF sull'oro fisico, hedge contro inflazione / rischio sistemico.",
             "reference": "Breakout dell'oro spesso segnala aumento di timori macro/geo o monetari.",
@@ -340,7 +356,7 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
         "observation_start": start_date,
     }
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, timeout=12)
         r.raise_for_status()
         data = r.json().get("observations", [])
         if not data:
@@ -351,7 +367,7 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
             v = obs["value"]
             try:
                 v_float = float(v)
-            except ValueError:
+            except Exception:
                 v_float = np.nan
             values.append(v_float)
         s = pd.Series(values, index=pd.to_datetime(dates))
@@ -374,10 +390,26 @@ def fetch_yf_series(tickers, start_date: str) -> dict:
             auto_adjust=True,
             progress=False,
         )
-        if isinstance(data, pd.DataFrame) and "Adj Close" in data.columns:
-            px = data["Adj Close"]
+        px = None
+
+        # yfinance può tornare MultiIndex columns (Price field -> tickers) oppure colonne piatte
+        if isinstance(data.columns, pd.MultiIndex):
+            # tipicamente livello 0 contiene "Adj Close" / "Close"
+            if "Adj Close" in data.columns.get_level_values(0):
+                px = data["Adj Close"]
+            elif "Close" in data.columns.get_level_values(0):
+                px = data["Close"]
+            else:
+                # fallback: prova a prendere il primo campo disponibile
+                px = data.xs(data.columns.get_level_values(0)[0], axis=1, level=0)
         else:
-            px = data
+            if "Adj Close" in data.columns:
+                px = data["Adj Close"]
+            elif "Close" in data.columns:
+                px = data["Close"]
+            else:
+                px = data
+
         if isinstance(px, pd.Series):
             out[tickers[0]] = px.dropna()
         else:
@@ -389,10 +421,22 @@ def fetch_yf_series(tickers, start_date: str) -> dict:
         for t in tickers:
             try:
                 df = yf.download(t, start=start_date, auto_adjust=True, progress=False)
-                if "Adj Close" in df.columns:
-                    out[t] = df["Adj Close"].dropna()
-                elif "Close" in df.columns:
-                    out[t] = df["Close"].dropna()
+                if isinstance(df.columns, pd.MultiIndex):
+                    if "Adj Close" in df.columns.get_level_values(0):
+                        s = df["Adj Close"]
+                        out[t] = s if isinstance(s, pd.Series) else s.iloc[:, 0]
+                    elif "Close" in df.columns.get_level_values(0):
+                        s = df["Close"]
+                        out[t] = s if isinstance(s, pd.Series) else s.iloc[:, 0]
+                    else:
+                        out[t] = df.iloc[:, 0].dropna()
+                else:
+                    if "Adj Close" in df.columns:
+                        out[t] = df["Adj Close"].dropna()
+                    elif "Close" in df.columns:
+                        out[t] = df["Close"].dropna()
+                    else:
+                        out[t] = df.iloc[:, 0].dropna()
             except Exception:
                 out[t] = pd.Series(dtype=float)
     return out
@@ -431,13 +475,16 @@ def compute_indicator_score(series: pd.Series, direction: int):
     hist = s[s.index >= start]
     if len(hist) < 10:
         hist = s
+
     mean = hist.mean()
     std = hist.std()
     latest = s.iloc[-1]
+
     if std is None or std == 0 or np.isnan(std):
         z = 0.0
     else:
         z = (latest - mean) / std
+
     raw = direction * z
     raw = max(-2.0, min(2.0, raw))
     score = (raw + 2.0) / 4.0 * 100.0
@@ -474,17 +521,24 @@ def status_label_it(status: str) -> str:
     return "N/A"
 
 
-def fmt_value(val, unit: str):
-    if np.isnan(val):
+def fmt_value(val, unit: str, scale: float = 1.0):
+    if val is None or (isinstance(val, float) and np.isnan(val)):
         return "n/a"
+    try:
+        v = float(val) * float(scale)
+    except Exception:
+        return "n/a"
+
     if unit in ("%", "pp"):
-        return f"{val:.2f}{unit}"
+        return f"{v:.2f}{unit}"
     if unit == "ratio":
-        return f"{val:.2f}"
+        return f"{v:.2f}"
     if unit == "bn USD":
-        # scala in miliardi se i dati sono in milioni; WALCL è in milioni
-        return f"{val/1000:.1f} {unit}"
-    return f"{val:.2f}"
+        return f"{v:.1f} {unit}"
+    if unit == "":
+        # prezzi/indici: lascia due decimali, ma senza unità
+        return f"{v:.2f}"
+    return f"{v:.2f} {unit}"
 
 
 # -------------- MAIN DASHBOARD --------------
@@ -518,9 +572,10 @@ def main():
     if fred_key is None:
         st.sidebar.error("⚠️ Inserisci `FRED_API_KEY` in `st.secrets` per abilitare i dati macro (FRED).")
 
-    # ---- Fetch dati FRED ----
+    # ---- Fetch dati ----
     st.info("Caricamento dati in corso (FRED + yfinance). L'operazione può richiedere qualche secondo...")
 
+    # ---- Fetch dati FRED ----
     fred_series_ids = {
         "real_10y": "DFII10",
         "nominal_10y": "DGS10",
@@ -533,9 +588,7 @@ def main():
         "rrp": "RRPONTSYD",
     }
 
-    fred_data = {}
-    for key, series_id in fred_series_ids.items():
-        fred_data[key] = fetch_fred_series(series_id, start_date)
+    fred_data = {k: fetch_fred_series(v, start_date) for k, v in fred_series_ids.items()}
 
     # Costruzione serie derivate FRED
     indicators = {}
@@ -543,21 +596,22 @@ def main():
     # Policy & rates
     indicators["real_10y"] = fred_data["real_10y"]
     indicators["nominal_10y"] = fred_data["nominal_10y"]
+
     if not fred_data["nominal_10y"].empty and not fred_data["dgs2"].empty:
-        # allineo sugli indici comuni
         yc = fred_data["nominal_10y"].to_frame("10y").join(
             fred_data["dgs2"].to_frame("2y"), how="inner"
         )
-        indicators["yield_curve_10_2"] = yc["10y"] - yc["2y"]
+        indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
     else:
         indicators["yield_curve_10_2"] = pd.Series(dtype=float)
 
     # Macro: CPI YoY e unemployment
     cpi_index = fred_data["cpi_index"]
     if not cpi_index.empty:
-        indicators["cpi_yoy"] = cpi_index.pct_change(12) * 100.0
+        indicators["cpi_yoy"] = (cpi_index.pct_change(12) * 100.0).dropna()
     else:
         indicators["cpi_yoy"] = pd.Series(dtype=float)
+
     indicators["breakeven_10y"] = fred_data["breakeven_10y"]
     indicators["unemployment_rate"] = fred_data["unemployment_rate"]
 
@@ -579,16 +633,15 @@ def main():
     ]
     yf_data = fetch_yf_series(yf_tickers, start_date)
 
-    # DXY
     indicators["dxy"] = yf_data.get("DX-Y.NYB", pd.Series(dtype=float))
-    # VIX
     indicators["vix"] = yf_data.get("^VIX", pd.Series(dtype=float))
+
     # SPY trend
     spy_series = yf_data.get("SPY", pd.Series(dtype=float))
     if not spy_series.empty:
         ma200 = spy_series.rolling(200).mean()
-        spy_trend = spy_series / ma200
-        indicators["spy_trend"] = spy_trend.dropna()
+        spy_trend = (spy_series / ma200).dropna()
+        indicators["spy_trend"] = spy_trend
     else:
         indicators["spy_trend"] = pd.Series(dtype=float)
 
@@ -596,17 +649,13 @@ def main():
     hyg = yf_data.get("HYG", pd.Series(dtype=float))
     lqd = yf_data.get("LQD", pd.Series(dtype=float))
     if not hyg.empty and not lqd.empty:
-        hyg_lqd = (hyg.to_frame("HYG").join(lqd.to_frame("LQD"), how="inner"))
-        hyg_lqd_ratio = hyg_lqd["HYG"] / hyg_lqd["LQD"]
-        indicators["hyg_lqd_ratio"] = hyg_lqd_ratio.dropna()
+        joined = hyg.to_frame("HYG").join(lqd.to_frame("LQD"), how="inner").dropna()
+        indicators["hyg_lqd_ratio"] = (joined["HYG"] / joined["LQD"]).dropna()
     else:
         indicators["hyg_lqd_ratio"] = pd.Series(dtype=float)
 
-    # World equity
     indicators["world_equity"] = yf_data.get("URTH", pd.Series(dtype=float))
-    # Duration proxy
     indicators["duration_proxy_tlt"] = yf_data.get("TLT", pd.Series(dtype=float))
-    # Gold
     indicators["gold"] = yf_data.get("GLD", pd.Series(dtype=float))
 
     # ---- Calcolo punteggi per indicatore ----
@@ -615,8 +664,7 @@ def main():
         meta = INDICATOR_META.get(key)
         if meta is None:
             continue
-        direction = meta["direction"]
-        score, z, latest = compute_indicator_score(series, direction)
+        score, z, latest = compute_indicator_score(series, meta["direction"])
         status = classify_status(score)
         indicator_scores[key] = {
             "score": score,
@@ -639,10 +687,7 @@ def main():
         if vals:
             block_score = float(np.mean(vals))
             block_status = classify_status(block_score)
-            block_scores[bkey] = {
-                "score": block_score,
-                "status": block_status,
-            }
+            block_scores[bkey] = {"score": block_score, "status": block_status}
             global_score += block_score * binfo["weight"]
             total_weight_used += binfo["weight"]
         else:
@@ -662,14 +707,10 @@ def main():
     col1, col2, col3 = st.columns(3)
 
     with col1:
+        global_score_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
         st.markdown("**Regime score (0–100)**")
-        global_score_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
-        st.markdown(
-            f"<div class='big-number'>{global_score_txt}</div>",
-            unsafe_allow_html=True,
-        )
-
+        st.markdown(f"<div class='big-number'>{global_score_txt}</div>", unsafe_allow_html=True)
         st.markdown(
             f"<div class='sub-number'>{status_emoji(global_status)} {status_label_it(global_status)}</div>",
             unsafe_allow_html=True,
@@ -677,18 +718,14 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
-        # policy & macro block average
         pol = block_scores.get("policy", {}).get("score", np.nan)
         mac = block_scores.get("macro", {}).get("score", np.nan)
-        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
-        st.markdown("**Policy & Macro** (media)")
         txt = "n/a"
         if not np.isnan(pol) and not np.isnan(mac):
-            txt = f"{(pol + mac)/2:.1f}"
-        st.markdown(
-            f"<div class='big-number'>{txt}</div>",
-            unsafe_allow_html=True,
-        )
+            txt = f"{(pol + mac) / 2:.1f}"
+        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
+        st.markdown("**Policy & Macro** (media)")
+        st.markdown(f"<div class='big-number'>{txt}</div>", unsafe_allow_html=True)
         st.markdown(
             "<div class='sub-number'>Stato medio di tassi reali, curva, inflazione e crescita.</div>",
             unsafe_allow_html=True,
@@ -698,24 +735,19 @@ def main():
     with col3:
         risk_block = block_scores.get("risk", {}).get("score", np.nan)
         fin_block = block_scores.get("fincond", {}).get("score", np.nan)
-        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
-        st.markdown("**Conditions & Risk appetite** (media)")
         txt2 = "n/a"
         if not np.isnan(risk_block) and not np.isnan(fin_block):
-            txt2 = f"{(risk_block + fin_block)/2:.1f}"
-        st.markdown(
-            f"<div class='big-number'>{txt2}</div>",
-            unsafe_allow_html=True,
-        )
+            txt2 = f"{(risk_block + fin_block) / 2:.1f}"
+        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
+        st.markdown("**Conditions & Risk appetite** (media)")
+        st.markdown(f"<div class='big-number'>{txt2}</div>", unsafe_allow_html=True)
         st.markdown(
             "<div class='sub-number'>Financial conditions, credito, vol e sentiment.</div>",
             unsafe_allow_html=True,
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.caption(
-        "Nota: soglie regime (euristiche): <40 = Risk-off, 40–60 = Neutrale, >60 = Risk-on."
-    )
+    st.caption("Nota: soglie regime (euristiche): <40 = Risk-off, 40–60 = Neutrale, >60 = Risk-on.")
 
     # -------------- SEZIONI PER BLOCCHI --------------
 
@@ -734,19 +766,19 @@ def main():
                 st.write("n/a")
             else:
                 st.write(f"{bscore:.1f} {status_emoji(bstatus)} {status_label_it(bstatus)}")
-
         with colb2:
             st.write("")
 
-        # Indicatori del blocco
         for ikey in binfo["indicators"]:
             meta = INDICATOR_META.get(ikey)
             if meta is None:
                 continue
+
             series = indicators.get(ikey, pd.Series(dtype=float))
             if series is None or series.empty:
                 st.warning(f"Dati mancanti per {meta['label']}.")
                 continue
+
             score_info = indicator_scores.get(ikey, {})
             score = score_info.get("score", np.nan)
             status = score_info.get("status", "n/a")
@@ -776,17 +808,12 @@ def main():
             with c2:
                 st.metric(
                     label="Ultimo valore",
-                    value=fmt_value(latest, meta["unit"]),
+                    value=fmt_value(latest, meta["unit"], meta.get("scale", 1.0)),
                     delta=None if np.isnan(delta_1m) else f"{delta_1m:+.1f}% vs 1M",
                 )
-                st.write(
-                    f"{status_emoji(status)} {status_label_it(status)} "
-                    score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
-                    st.write(f"{status_emoji(status)} {status_label_it(status)} (score {score_txt})")
+                score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
+                st.write(f"{status_emoji(status)} {status_label_it(status)} (score {score_txt})")
 
-                )
-
-            # Grafico
             st.line_chart(series)
 
     # -------------- WHAT CHANGED --------------
@@ -813,7 +840,7 @@ def main():
 
     if rows:
         df_changes = pd.DataFrame(rows).set_index("Indicatore")
-        st.dataframe(df_changes)
+        st.dataframe(df_changes, use_container_width=True)
     else:
         st.write("Nessun dato sufficiente per calcolare le variazioni.")
 
@@ -830,14 +857,12 @@ def main():
     generate_payload = st.button("Generate payload")
 
     if generate_payload:
-        # Costruzione payload sintetico
         payload_lines = []
         payload_lines.append("macro_regime_payload:")
         payload_lines.append(f"  generated_at: {today.isoformat()}")
         payload_lines.append(f"  global_score: {0.0 if np.isnan(global_score) else round(global_score, 1)}")
         payload_lines.append(f"  global_status: {global_status}")
 
-        # Blocchi
         payload_lines.append("  blocks:")
         for bkey, binfo in BLOCKS.items():
             bscore = block_scores[bkey]["score"]
@@ -846,7 +871,6 @@ def main():
             payload_lines.append(f"      score: {0.0 if np.isnan(bscore) else round(bscore, 1)}")
             payload_lines.append(f"      status: {bstatus}")
 
-        # Indicatori
         payload_lines.append("  indicators:")
         for key, meta in INDICATOR_META.items():
             s_info = indicator_scores.get(key, {})
@@ -855,14 +879,15 @@ def main():
             latest = s_info.get("latest", np.nan)
             series = indicators.get(key, pd.Series(dtype=float))
             d30 = pct_change_over_days(series, 30)
+
             payload_lines.append(f"    - name: \"{meta['label']}\"")
             payload_lines.append(f"      key: \"{key}\"")
-            payload_lines.append(f"      latest_value: \"{fmt_value(latest, meta['unit'])}\"")
+            payload_lines.append(
+                f"      latest_value: \"{fmt_value(latest, meta['unit'], meta.get('scale', 1.0))}\""
+            )
             payload_lines.append(f"      score: {0.0 if np.isnan(score) else round(score, 1)}")
             payload_lines.append(f"      status: {status}")
-            payload_lines.append(
-                f"      delta_30d_pct: {0.0 if np.isnan(d30) else round(d30, 2)}"
-            )
+            payload_lines.append(f"      delta_30d_pct: {0.0 if np.isnan(d30) else round(d30, 2)}")
 
         payload_text = "\n".join(payload_lines)
 
@@ -895,4 +920,5 @@ Non aggiungere disclaimer legali lunghissimi: una breve nota finale è sufficien
 
 if __name__ == "__main__":
     main()
+
 
