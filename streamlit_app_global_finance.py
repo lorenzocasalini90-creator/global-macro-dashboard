@@ -10,18 +10,19 @@ from pandas.tseries.offsets import DateOffset
 # -------------- CONFIG DI BASE --------------
 
 st.set_page_config(
-    page_title="Global Macro Regime Dashboard (Equity & Bond)",
+    page_title="Global finance | Macro overview",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS minimale per look "premium" sobrio
+# CSS minimale per look "premium" sobrio + card per charts
 st.markdown(
     """
     <style>
     .big-number {
         font-size: 2.2rem;
-        font-weight: 600;
+        font-weight: 650;
+        line-height: 1.05;
     }
     .sub-number {
         font-size: 1.0rem;
@@ -29,14 +30,27 @@ st.markdown(
     }
     .kpi-card {
         padding: 1rem 1.2rem;
-        border-radius: 0.8rem;
-        border: 1px solid #e0e0e0;
-        background-color: #fafafa;
+        border-radius: 0.9rem;
+        border: 1px solid #dedede;
+        background-color: #fbfbfb;
         margin-bottom: 1rem;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    }
+    .chart-card {
+        padding: 0.9rem 1.0rem;
+        border-radius: 0.9rem;
+        border: 1px solid #e3e3e3;
+        background-color: #ffffff;
+        margin: 0.5rem 0 1rem 0;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
     .section-separator {
-        border-top: 1px solid #e0e0e0;
-        margin: 1.5rem 0 1rem 0;
+        border-top: 1px solid #e6e6e6;
+        margin: 1.25rem 0 1rem 0;
+    }
+    .tiny-muted {
+        color: #777;
+        font-size: 0.9rem;
     }
     </style>
     """,
@@ -51,9 +65,10 @@ INDICATOR_META = {
     "real_10y": {
         "label": "US 10Y TIPS real yield",
         "unit": "%",
-        "direction": -1,  # alto = risk-off
+        "direction": -1,
         "source": "FRED DFII10",
         "scale": 1.0,
+        "zero_line": True,
         "expander": {
             "what": "Rendimento reale (al netto dell'inflazione attesa) sui Treasury USA a 10 anni (TIPS).",
             "reference": "Area <0% = condizioni molto accomodanti; 0–2% = zona neutrale; >2% = condizioni restrittive.",
@@ -69,6 +84,7 @@ INDICATOR_META = {
         "direction": -1,
         "source": "FRED DGS10",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Rendimento nominale sui Treasury USA a 10 anni.",
             "reference": "Tipicamente 2–4% in fasi 'normali'; spike rapidi verso l'alto spesso associati a shock di policy / inflazione.",
@@ -81,9 +97,10 @@ INDICATOR_META = {
     "yield_curve_10_2": {
         "label": "US Yield curve 10Y–2Y",
         "unit": "pp",
-        "direction": +1,  # curva più ripida = più risk-on
+        "direction": +1,
         "source": "DGS10 - DGS2",
         "scale": 1.0,
+        "zero_line": True,
         "expander": {
             "what": "Differenza tra rendimento Treasury 10Y e 2Y (curva dei rendimenti).",
             "reference": "Spread >0: curva 'normale'; spread <0: curva invertita, spesso segnale di recessione futura.",
@@ -98,9 +115,10 @@ INDICATOR_META = {
     "breakeven_10y": {
         "label": "10Y Breakeven inflation",
         "unit": "%",
-        "direction": -1,  # inflazione attesa alta = rischio restrizione
+        "direction": -1,
         "source": "FRED T10YIE",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Inflazione media attesa dal mercato per i prossimi 10 anni, derivata da nominali vs TIPS.",
             "reference": "Circa 2–3% = inflazione 'ben ancorata'; >>3% = rischio inflazione elevata/persistente.",
@@ -116,6 +134,7 @@ INDICATOR_META = {
         "direction": -1,
         "source": "FRED CPIAUCSL (YoY)",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Inflazione headline USA anno su anno.",
             "reference": "2% target Fed; valori >3–4% per lungo tempo indicano inflazione 'sticky'.",
@@ -131,11 +150,12 @@ INDICATOR_META = {
         "direction": -1,
         "source": "FRED UNRATE",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Tasso di disoccupazione USA.",
             "reference": "Minimi storici ~3–4%; aumenti rapidi spesso precedono/seguono recessioni.",
             "interpretation": (
-                "- Disoccupazione **ai minimi ma stabile** → mercato del lavoro forte, ma attenzione a eccessi di overheating.\n"
+                "- Disoccupazione **ai minimi ma stabile** → mercato del lavoro forte.\n"
                 "- Disoccupazione **in forte crescita** → segnale di slowdown / recessione → ambiente più risk-off."
             ),
         },
@@ -143,17 +163,18 @@ INDICATOR_META = {
 
     # Financial Conditions & Liquidity
     "dxy": {
-        "label": "US Dollar index (DXY)",
+        "label": "USD (DXY / UUP proxy)",
         "unit": "",
-        "direction": -1,  # USD forte = condizioni più strette
-        "source": "yfinance DX-Y.NYB",
+        "direction": -1,
+        "source": "yfinance DX-Y.NYB (fallback: UUP)",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
-            "what": "Indice del dollaro USA contro principali valute (proxy condizioni finanziarie globali).",
-            "reference": "Trend forte e persistente del USD spesso coincide con fasi di stress o tightening globale.",
+            "what": "Indice del dollaro USA (o proxy ETF UUP se DXY non disponibile) come misura di tightness globale.",
+            "reference": "USD forte e persistente spesso coincide con fasi di tightening/stress globale.",
             "interpretation": (
-                "- USD **forte e in apprezzamento** → condizioni più dure per EM e commodities, risk-off.\n"
-                "- USD **debole o in deprezzamento** → condizioni più accomodanti, supporto a risk asset globali."
+                "- USD **forte e in apprezzamento** → condizioni più dure per EM/commodities, spesso risk-off.\n"
+                "- USD **debole** → condizioni più accomodanti e supporto ai risk asset globali."
             ),
         },
     },
@@ -163,59 +184,63 @@ INDICATOR_META = {
         "direction": -1,
         "source": "FRED BAMLH0A0HYM2",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Spread opzionale aggiustato dei corporate bond High Yield USA vs Treasury.",
             "reference": "Spread bassi (es. <400 bps) = risk appetite; spike sopra 600–700 bps = stress significativo.",
             "interpretation": (
                 "- Spread **in allargamento** → mercato che prezza maggior rischio default → risk-off.\n"
-                "- Spread **in compressione** → ricerca di rendimento, appetite per credito HY."
+                "- Spread **in compressione** → appetite per credito HY."
             ),
         },
     },
     "fed_balance_sheet": {
         "label": "Fed balance sheet (WALCL)",
         "unit": "bn USD",
-        "direction": +1,  # bilancio più grande = più liquidità
+        "direction": +1,
         "source": "FRED WALCL",
-        "scale": 1.0 / 1000.0,  # WALCL è in milioni USD -> bn USD
+        "scale": 1.0 / 1000.0,  # milioni -> bn
+        "zero_line": False,
         "expander": {
-            "what": "Totale attivi della Federal Reserve (dimensione del bilancio).",
-            "reference": "Trend di espansione spesso associato a programmi di QE/liquidità straordinaria.",
+            "what": "Totale attivi della Fed (dimensione del bilancio).",
+            "reference": "Trend di espansione (QE) tende a supportare la liquidità; contrazione (QT) tende a drenarla.",
             "interpretation": (
                 "- Bilancio **in espansione** → più liquidità nel sistema, supporto ai risk asset.\n"
-                "- Bilancio **in contrazione rapida** → QT e drenaggio di liquidità, spesso vento contrario per equity/credit."
+                "- Bilancio **in contrazione rapida** → vento contrario per equity/credit."
             ),
         },
     },
     "rrp": {
         "label": "Fed Overnight RRP usage",
         "unit": "bn USD",
-        "direction": -1,  # più RRP = più liquidità parcheggiata
+        "direction": -1,
         "source": "FRED RRPONTSYD",
-        "scale": 1.0,  # RRPONTSYD è già in bn USD
+        "scale": 1.0,  # già bn
+        "zero_line": True,
         "expander": {
-            "what": "Volume di Reverse Repo overnight della Fed (liquidità parcheggiata in strumenti risk-free).",
-            "reference": "Valori elevati indicano molta liquidità 'ferma' fuori dai mercati di rischio.",
+            "what": "Reverse Repo overnight: liquidità parcheggiata in strumenti risk-free.",
+            "reference": "RRP alto = liquidità 'ferma'; RRP in calo = liquidità che torna verso il mercato.",
             "interpretation": (
-                "- RRP **elevato e persistente** → liquidità che non fluisce verso risk asset.\n"
-                "- RRP **in calo** → rilascio di liquidità verso il mercato, potenziale supporto a risk-on."
+                "- RRP **elevato** → meno benzina per risk asset.\n"
+                "- RRP **in calo** → potenziale supporto a risk-on."
             ),
         },
     },
 
     # Risk Appetite & Stress
     "vix": {
-        "label": "VIX (S&P 500 implied vol)",
+        "label": "VIX",
         "unit": "",
         "direction": -1,
         "source": "yfinance ^VIX",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
             "what": "Volatilità implicita a 30 giorni sull'S&P 500.",
-            "reference": "VIX <15 = bassa volatilità; 15–25 = normale; >25–30 = stress; >40 = panic.",
+            "reference": "VIX <15 basso; 15–25 normale; >25–30 stress; >40 panic.",
             "interpretation": (
-                "- VIX **molto basso e stabile** → complacency / risk-on (ma attenzione a eccessi).\n"
-                "- VIX **in spike e stabilmente alto** → fasi di stress sistemico → risk-off."
+                "- VIX **basso/stabile** → risk-on.\n"
+                "- VIX **alto/spiking** → risk-off."
             ),
         },
     },
@@ -225,59 +250,63 @@ INDICATOR_META = {
         "direction": +1,
         "source": "yfinance SPY",
         "scale": 1.0,
+        "zero_line": True,  # linea 1.0
         "expander": {
-            "what": "Rapporto tra prezzo di SPY e sua media mobile a 200 giorni (proxy di trend di lungo periodo).",
-            "reference": "Valori >1 indicano trend rialzista di lungo periodo; <1 trend ribassista.",
+            "what": "Rapporto tra SPY e media mobile 200 giorni (trend di lungo periodo).",
+            "reference": "Ratio >1 = trend rialzista; <1 = trend ribassista.",
             "interpretation": (
-                "- Ratio **>1 e crescente** → bull market strutturale, contesto più risk-on.\n"
-                "- Ratio **<1 e decrescente** → bear market / drawdown prolungato → risk-off."
+                "- Ratio **>1** → bull trend.\n"
+                "- Ratio **<1** → downtrend / risk-off."
             ),
         },
     },
     "hyg_lqd_ratio": {
-        "label": "HYG / LQD (HY vs IG credit)",
+        "label": "HYG / LQD (HY vs IG)",
         "unit": "ratio",
         "direction": +1,
         "source": "yfinance HYG, LQD",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
-            "what": "Rapporto tra ETF High Yield (HYG) e Investment Grade (LQD).",
-            "reference": "Ratio in salita = HY che sovraperforma IG; ratio in calo = fuga verso qualità IG.",
+            "what": "Rapporto HY vs IG: misura la propensione al rischio di credito.",
+            "reference": "Ratio in salita = appetite per HY; in calo = fuga verso qualità.",
             "interpretation": (
-                "- Ratio **in salita** → mercato più disposto a prendere rischio di credito (risk-on).\n"
-                "- Ratio **in discesa** → preferenza per IG, tipica di fasi risk-off."
+                "- Ratio **in salita** → risk-on.\n"
+                "- Ratio **in discesa** → risk-off."
             ),
         },
     },
 
     # Cross-Asset Performance
     "world_equity": {
-        "label": "World equity (URTH / ACWI)",
+        "label": "World equity (URTH)",
         "unit": "",
         "direction": +1,
         "source": "yfinance URTH",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
-            "what": "ETF su MSCI World (o equivalente), proxy del risk-on globale.",
-            "reference": "Trend di prezzo e drawdown forniscono il contesto globale oltre l'S&P 500.",
+            "what": "ETF MSCI World: proxy del risk-on globale.",
+            "reference": "Trend e drawdown aiutano a capire se il risk-on è davvero globale.",
             "interpretation": (
-                "- Trend **rialzista** e drawdown contenuti → conferma di regime risk-on globale.\n"
-                "- Trend **ribassista / drawdown profondi** → conferma di regime risk-off globale."
+                "- Uptrend → conferma risk-on.\n"
+                "- Downtrend → conferma risk-off."
             ),
         },
     },
     "duration_proxy_tlt": {
-        "label": "US long Treasuries (TLT)",
+        "label": "Long duration (TLT)",
         "unit": "",
-        "direction": -1,  # rally TLT spesso in fasi di stress
+        "direction": -1,
         "source": "yfinance TLT",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
-            "what": "ETF su Treasury USA a lunga duration.",
-            "reference": "Rally forti e improvvisi spesso coincidono con flight-to-quality / tagli tassi.",
+            "what": "Treasury USA lunga duration: hedge tipico in risk-off.",
+            "reference": "Rally TLT spesso coincide con flight-to-quality.",
             "interpretation": (
-                "- TLT **in rally forte** spesso associato a fasi di stress su equity (risk-off), ma positivo per chi è lungo duration.\n"
-                "- TLT **debole** in contesti di rialzo tassi → attenzione a duration e a equity long-duration."
+                "- TLT **in rally** → spesso contesto risk-off (ma bene per chi hedgia duration).\n"
+                "- TLT **debole** con tassi in salita → attenzione a duration e equity long-duration."
             ),
         },
     },
@@ -287,12 +316,13 @@ INDICATOR_META = {
         "direction": -1,
         "source": "yfinance GLD",
         "scale": 1.0,
+        "zero_line": False,
         "expander": {
-            "what": "ETF sull'oro fisico, hedge contro inflazione / rischio sistemico.",
-            "reference": "Breakout dell'oro spesso segnala aumento di timori macro/geo o monetari.",
+            "what": "Oro: hedge contro inflazione / shock / rischio sistemico.",
+            "reference": "Breakout spesso associato a aumento incertezza macro/geopolitica/monetaria.",
             "interpretation": (
-                "- Oro **in forte uptrend** → mercato cerca hedging contro shock (inflazione, geopolitica, rischio sistemico).\n"
-                "- Oro **laterale/debole** in bull equity 'pulito' → regime più risk-on."
+                "- Oro **forte** → domanda di hedge.\n"
+                "- Oro **debole** in bull equity → regime più risk-on 'pulito'."
             ),
         },
     },
@@ -304,31 +334,36 @@ BLOCKS = {
         "name": "1) Policy & Real Rates",
         "weight": 0.25,
         "indicators": ["real_10y", "nominal_10y", "yield_curve_10_2"],
-        "description": "Lettura di tassi reali/nominali e forma della curva per capire quanto il 'prezzo del tempo' sia favorevole o ostile ai risk asset.",
+        "layout_rows": [["real_10y", "nominal_10y"], ["yield_curve_10_2"]],
+        "description": "Tassi reali/nominali e curva: misura quanto il 'prezzo del tempo' è favorevole o ostile ai risk asset.",
     },
     "macro": {
         "name": "2) Inflazione & Crescita",
         "weight": 0.20,
         "indicators": ["breakeven_10y", "cpi_yoy", "unemployment_rate"],
+        "layout_rows": [["breakeven_10y", "cpi_yoy"], ["unemployment_rate"]],
         "description": "Backdrop macro: disinflation vs reflation vs stagflation/slowdown.",
     },
     "fincond": {
         "name": "3) Financial Conditions & Liquidity",
         "weight": 0.20,
         "indicators": ["dxy", "hy_oas", "fed_balance_sheet", "rrp"],
-        "description": "Condizioni finanziarie globali, credito e liquidità dollaro.",
+        "layout_rows": [["dxy", "hy_oas"], ["fed_balance_sheet", "rrp"]],
+        "description": "Condizioni finanziarie, credito e proxy liquidità USD.",
     },
     "risk": {
         "name": "4) Risk Appetite & Stress",
         "weight": 0.20,
         "indicators": ["vix", "spy_trend", "hyg_lqd_ratio"],
-        "description": "Sentiment e stress di mercato tra equity e credito.",
+        "layout_rows": [["vix", "spy_trend"], ["hyg_lqd_ratio"]],
+        "description": "Volatilità, trend equity e rischio credito (HY vs IG).",
     },
     "cross": {
-        "name": "5) Asset Performance & Cross-Asset Confirmation",
+        "name": "5) Cross-Asset Confirmation",
         "weight": 0.15,
         "indicators": ["world_equity", "duration_proxy_tlt", "gold"],
-        "description": "Conferma incrociata da equity globale, duration e hedging (oro).",
+        "layout_rows": [["world_equity", "duration_proxy_tlt"], ["gold"]],
+        "description": "Conferme da equity globale, duration e hedge (oro).",
     },
 }
 
@@ -372,8 +407,7 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
             values.append(v_float)
         s = pd.Series(values, index=pd.to_datetime(dates))
         s = s.replace({".": np.nan}).astype(float)
-        s = s.sort_index()
-        return s
+        return s.sort_index()
     except Exception:
         return pd.Series(dtype=float)
 
@@ -391,16 +425,12 @@ def fetch_yf_series(tickers, start_date: str) -> dict:
             progress=False,
         )
         px = None
-
-        # yfinance può tornare MultiIndex columns (Price field -> tickers) oppure colonne piatte
         if isinstance(data.columns, pd.MultiIndex):
-            # tipicamente livello 0 contiene "Adj Close" / "Close"
             if "Adj Close" in data.columns.get_level_values(0):
                 px = data["Adj Close"]
             elif "Close" in data.columns.get_level_values(0):
                 px = data["Close"]
             else:
-                # fallback: prova a prendere il primo campo disponibile
                 px = data.xs(data.columns.get_level_values(0)[0], axis=1, level=0)
         else:
             if "Adj Close" in data.columns:
@@ -417,7 +447,6 @@ def fetch_yf_series(tickers, start_date: str) -> dict:
                 if t in px.columns:
                     out[t] = px[t].dropna()
     except Exception:
-        # Fallback: fetch each ticker separately
         for t in tickers:
             try:
                 df = yf.download(t, start=start_date, auto_adjust=True, progress=False)
@@ -461,9 +490,6 @@ def pct_change_over_days(series: pd.Series, days: int) -> float:
 
 
 def compute_indicator_score(series: pd.Series, direction: int):
-    """
-    Ritorna (score_0_100, z_score, latest_value)
-    """
     if series is None or series.empty:
         return np.nan, np.nan, np.nan
     s = series.dropna()
@@ -502,23 +528,11 @@ def classify_status(score: float) -> str:
 
 
 def status_emoji(status: str) -> str:
-    if status == "risk_on":
-        return "🟢"
-    if status == "risk_off":
-        return "🔴"
-    if status == "neutral":
-        return "🟡"
-    return "⚪️"
+    return {"risk_on": "🟢", "neutral": "🟡", "risk_off": "🔴"}.get(status, "⚪️")
 
 
 def status_label_it(status: str) -> str:
-    if status == "risk_on":
-        return "Risk-on"
-    if status == "risk_off":
-        return "Risk-off"
-    if status == "neutral":
-        return "Neutrale"
-    return "N/A"
+    return {"risk_on": "Risk-on", "neutral": "Neutrale", "risk_off": "Risk-off"}.get(status, "N/A")
 
 
 def fmt_value(val, unit: str, scale: float = 1.0):
@@ -532,27 +546,80 @@ def fmt_value(val, unit: str, scale: float = 1.0):
     if unit in ("%", "pp"):
         return f"{v:.2f}{unit}"
     if unit == "ratio":
-        return f"{v:.2f}"
+        return f"{v:.3f}"
     if unit == "bn USD":
         return f"{v:.1f} {unit}"
     if unit == "":
-        # prezzi/indici: lascia due decimali, ma senza unità
         return f"{v:.2f}"
     return f"{v:.2f} {unit}"
+
+
+def score_to_badge(score: float) -> str:
+    s = classify_status(score)
+    return f"{status_emoji(s)} {status_label_it(s)}"
+
+
+def render_indicator_tile(key: str, series: pd.Series, indicator_scores: dict):
+    meta = INDICATOR_META[key]
+    score_info = indicator_scores.get(key, {})
+    score = score_info.get("score", np.nan)
+    status = score_info.get("status", "n/a")
+    latest = score_info.get("latest", np.nan)
+
+    delta_7d = pct_change_over_days(series, 7)
+    delta_30d = pct_change_over_days(series, 30)
+    delta_1y = pct_change_over_days(series, 365)
+
+    st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+
+    top_left, top_right = st.columns([3, 2])
+    with top_left:
+        st.markdown(f"**{meta['label']}**")
+        st.markdown(f"<div class='tiny-muted'>Fonte: {meta['source']}</div>", unsafe_allow_html=True)
+    with top_right:
+        score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
+        latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
+        st.markdown(f"**Ultimo**: {latest_txt}")
+        st.markdown(f"**Score**: {score_txt} ({score_to_badge(score)})")
+
+    with st.expander("Definizione & guida alla lettura", expanded=False):
+        exp = meta["expander"]
+        st.markdown(f"**Che metrica è**: {exp['what']}")
+        st.markdown(f"**Valori di riferimento**: {exp['reference']}")
+        st.markdown("**Interpretazione bidirezionale**:")
+        st.markdown(exp["interpretation"])
+        st.markdown(
+            f"**What changed**: "
+            f"{'n/a' if np.isnan(delta_7d) else f'{delta_7d:+.1f}%'} (7d), "
+            f"{'n/a' if np.isnan(delta_30d) else f'{delta_30d:+.1f}%'} (30d), "
+            f"{'n/a' if np.isnan(delta_1y) else f'{delta_1y:+.1f}%'} (1Y)"
+        )
+
+    # Chart
+    st.line_chart(series)
+
+    # Quick reference for zero-line metrics (solo testo, per non complicare chart)
+    if meta.get("zero_line", False):
+        st.caption("Nota: metrica con **linea di riferimento** (es. 0 o 1.0) utile per interpretare regime.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # -------------- MAIN DASHBOARD --------------
 
 def main():
-    st.title("Global Macro Regime Dashboard – Equity & Bond (ETF-based)")
-
+    st.title("Global finance | Macro overview")
     st.write(
-        "Dashboard macro–finanziaria **global multi-asset** per leggere il regime di mercato "
-        "e tradurlo in decisioni operative su equity, duration, credito e hedging."
+        "Dashboard macro–finanziaria **global multi-asset** per leggere il regime di mercato e tradurlo in decisioni operative "
+        "su **equity exposure**, **duration**, **credit risk** e **hedging**."
     )
 
-    # ---- Sidebar: parametri ----
+    # ---- Sidebar ----
     st.sidebar.header("Impostazioni")
+
+    if st.sidebar.button("🔄 Refresh data"):
+        st.cache_data.clear()
+        st.rerun()
 
     years_back = st.sidebar.slider(
         "Orizzonte storico (anni)",
@@ -572,112 +639,84 @@ def main():
     if fred_key is None:
         st.sidebar.error("⚠️ Inserisci `FRED_API_KEY` in `st.secrets` per abilitare i dati macro (FRED).")
 
-    # ---- Fetch dati ----
-    st.info("Caricamento dati in corso (FRED + yfinance). L'operazione può richiedere qualche secondo...")
+    # ---- Fetch dati con spinner ----
+    with st.spinner("Caricamento dati (FRED + yfinance)..."):
+        fred_series_ids = {
+            "real_10y": "DFII10",
+            "nominal_10y": "DGS10",
+            "dgs2": "DGS2",
+            "breakeven_10y": "T10YIE",
+            "cpi_index": "CPIAUCSL",
+            "unemployment_rate": "UNRATE",
+            "hy_oas": "BAMLH0A0HYM2",
+            "fed_balance_sheet": "WALCL",
+            "rrp": "RRPONTSYD",
+        }
+        fred_data = {k: fetch_fred_series(v, start_date) for k, v in fred_series_ids.items()}
 
-    # ---- Fetch dati FRED ----
-    fred_series_ids = {
-        "real_10y": "DFII10",
-        "nominal_10y": "DGS10",
-        "dgs2": "DGS2",
-        "breakeven_10y": "T10YIE",
-        "cpi_index": "CPIAUCSL",
-        "unemployment_rate": "UNRATE",
-        "hy_oas": "BAMLH0A0HYM2",
-        "fed_balance_sheet": "WALCL",
-        "rrp": "RRPONTSYD",
-    }
+        indicators = {}
+        indicators["real_10y"] = fred_data["real_10y"]
+        indicators["nominal_10y"] = fred_data["nominal_10y"]
 
-    fred_data = {k: fetch_fred_series(v, start_date) for k, v in fred_series_ids.items()}
+        if not fred_data["nominal_10y"].empty and not fred_data["dgs2"].empty:
+            yc = fred_data["nominal_10y"].to_frame("10y").join(
+                fred_data["dgs2"].to_frame("2y"), how="inner"
+            )
+            indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
+        else:
+            indicators["yield_curve_10_2"] = pd.Series(dtype=float)
 
-    # Costruzione serie derivate FRED
-    indicators = {}
+        cpi_index = fred_data["cpi_index"]
+        indicators["cpi_yoy"] = (cpi_index.pct_change(12) * 100.0).dropna() if not cpi_index.empty else pd.Series(dtype=float)
+        indicators["breakeven_10y"] = fred_data["breakeven_10y"]
+        indicators["unemployment_rate"] = fred_data["unemployment_rate"]
 
-    # Policy & rates
-    indicators["real_10y"] = fred_data["real_10y"]
-    indicators["nominal_10y"] = fred_data["nominal_10y"]
+        indicators["hy_oas"] = fred_data["hy_oas"]
+        indicators["fed_balance_sheet"] = fred_data["fed_balance_sheet"]
+        indicators["rrp"] = fred_data["rrp"]
 
-    if not fred_data["nominal_10y"].empty and not fred_data["dgs2"].empty:
-        yc = fred_data["nominal_10y"].to_frame("10y").join(
-            fred_data["dgs2"].to_frame("2y"), how="inner"
-        )
-        indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
-    else:
-        indicators["yield_curve_10_2"] = pd.Series(dtype=float)
+        yf_tickers = ["DX-Y.NYB", "UUP", "^VIX", "SPY", "HYG", "LQD", "URTH", "TLT", "GLD"]
+        yf_data = fetch_yf_series(yf_tickers, start_date)
 
-    # Macro: CPI YoY e unemployment
-    cpi_index = fred_data["cpi_index"]
-    if not cpi_index.empty:
-        indicators["cpi_yoy"] = (cpi_index.pct_change(12) * 100.0).dropna()
-    else:
-        indicators["cpi_yoy"] = pd.Series(dtype=float)
+        # DXY with fallback
+        dxy_series = yf_data.get("DX-Y.NYB", pd.Series(dtype=float))
+        if dxy_series is None or dxy_series.empty:
+            dxy_series = yf_data.get("UUP", pd.Series(dtype=float))
+        indicators["dxy"] = dxy_series
 
-    indicators["breakeven_10y"] = fred_data["breakeven_10y"]
-    indicators["unemployment_rate"] = fred_data["unemployment_rate"]
+        indicators["vix"] = yf_data.get("^VIX", pd.Series(dtype=float))
 
-    # Financial conditions
-    indicators["hy_oas"] = fred_data["hy_oas"]
-    indicators["fed_balance_sheet"] = fred_data["fed_balance_sheet"]
-    indicators["rrp"] = fred_data["rrp"]
+        spy_series = yf_data.get("SPY", pd.Series(dtype=float))
+        if not spy_series.empty:
+            ma200 = spy_series.rolling(200).mean()
+            indicators["spy_trend"] = (spy_series / ma200).dropna()
+        else:
+            indicators["spy_trend"] = pd.Series(dtype=float)
 
-    # ---- Fetch dati yfinance ----
-    yf_tickers = [
-        "DX-Y.NYB",  # DXY
-        "^VIX",
-        "SPY",
-        "HYG",
-        "LQD",
-        "URTH",
-        "TLT",
-        "GLD",
-    ]
-    yf_data = fetch_yf_series(yf_tickers, start_date)
+        hyg = yf_data.get("HYG", pd.Series(dtype=float))
+        lqd = yf_data.get("LQD", pd.Series(dtype=float))
+        if not hyg.empty and not lqd.empty:
+            joined = hyg.to_frame("HYG").join(lqd.to_frame("LQD"), how="inner").dropna()
+            indicators["hyg_lqd_ratio"] = (joined["HYG"] / joined["LQD"]).dropna()
+        else:
+            indicators["hyg_lqd_ratio"] = pd.Series(dtype=float)
 
-    indicators["dxy"] = yf_data.get("DX-Y.NYB", pd.Series(dtype=float))
-    indicators["vix"] = yf_data.get("^VIX", pd.Series(dtype=float))
+        indicators["world_equity"] = yf_data.get("URTH", pd.Series(dtype=float))
+        indicators["duration_proxy_tlt"] = yf_data.get("TLT", pd.Series(dtype=float))
+        indicators["gold"] = yf_data.get("GLD", pd.Series(dtype=float))
 
-    # SPY trend
-    spy_series = yf_data.get("SPY", pd.Series(dtype=float))
-    if not spy_series.empty:
-        ma200 = spy_series.rolling(200).mean()
-        spy_trend = (spy_series / ma200).dropna()
-        indicators["spy_trend"] = spy_trend
-    else:
-        indicators["spy_trend"] = pd.Series(dtype=float)
-
-    # HYG / LQD ratio
-    hyg = yf_data.get("HYG", pd.Series(dtype=float))
-    lqd = yf_data.get("LQD", pd.Series(dtype=float))
-    if not hyg.empty and not lqd.empty:
-        joined = hyg.to_frame("HYG").join(lqd.to_frame("LQD"), how="inner").dropna()
-        indicators["hyg_lqd_ratio"] = (joined["HYG"] / joined["LQD"]).dropna()
-    else:
-        indicators["hyg_lqd_ratio"] = pd.Series(dtype=float)
-
-    indicators["world_equity"] = yf_data.get("URTH", pd.Series(dtype=float))
-    indicators["duration_proxy_tlt"] = yf_data.get("TLT", pd.Series(dtype=float))
-    indicators["gold"] = yf_data.get("GLD", pd.Series(dtype=float))
-
-    # ---- Calcolo punteggi per indicatore ----
+    # ---- Calcolo punteggi ----
     indicator_scores = {}
     for key, series in indicators.items():
         meta = INDICATOR_META.get(key)
         if meta is None:
             continue
         score, z, latest = compute_indicator_score(series, meta["direction"])
-        status = classify_status(score)
-        indicator_scores[key] = {
-            "score": score,
-            "z": z,
-            "latest": latest,
-            "status": status,
-        }
+        indicator_scores[key] = {"score": score, "z": z, "latest": latest, "status": classify_status(score)}
 
-    # ---- Calcolo punteggi per blocco e score globale ----
     block_scores = {}
     global_score = 0.0
     total_weight_used = 0.0
-
     for bkey, binfo in BLOCKS.items():
         vals = []
         for ikey in binfo["indicators"]:
@@ -686,27 +725,33 @@ def main():
                 vals.append(s["score"])
         if vals:
             block_score = float(np.mean(vals))
-            block_status = classify_status(block_score)
-            block_scores[bkey] = {"score": block_score, "status": block_status}
+            block_scores[bkey] = {"score": block_score, "status": classify_status(block_score)}
             global_score += block_score * binfo["weight"]
             total_weight_used += binfo["weight"]
         else:
             block_scores[bkey] = {"score": np.nan, "status": "n/a"}
 
-    if total_weight_used > 0:
-        global_score = global_score / total_weight_used
-    else:
-        global_score = np.nan
-
+    global_score = (global_score / total_weight_used) if total_weight_used > 0 else np.nan
     global_status = classify_status(global_score)
 
-    # ---- KPI principali ----
+    # -------------- SEZIONE SINTETICA ARRICCHITA --------------
+
     st.markdown("<div class='section-separator'></div>", unsafe_allow_html=True)
-    st.subheader("0) KPI sintetici & regime globale")
+    st.subheader("0) Executive snapshot")
 
-    col1, col2, col3 = st.columns(3)
+    with st.expander("Come leggere score & soglie", expanded=False):
+        st.markdown(
+            """
+- Ogni indicatore viene trasformato in uno **score 0–100** usando uno z-score (ultimo valore vs storia recente) con segno coerente (risk-on / risk-off).
+- **60+** = segnale pro-risk (🟢), **40–60** = neutrale (🟡), **<40** = risk-off (🔴).
+- Il **Regime score globale** è una media ponderata dei blocchi (Policy/Macro/Conditions/Risk/Cross).
+- Soglie e pesi sono **euristiche** (spiegabili e modificabili) — servono per coerenza, non per “precisione accademica”.
+            """
+        )
 
-    with col1:
+    k1, k2, k3 = st.columns(3)
+
+    with k1:
         global_score_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
         st.markdown("**Regime score (0–100)**")
@@ -717,39 +762,24 @@ def main():
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with col2:
-        pol = block_scores.get("policy", {}).get("score", np.nan)
-        mac = block_scores.get("macro", {}).get("score", np.nan)
-        txt = "n/a"
-        if not np.isnan(pol) and not np.isnan(mac):
-            txt = f"{(pol + mac) / 2:.1f}"
+    with k2:
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
-        st.markdown("**Policy & Macro** (media)")
-        st.markdown(f"<div class='big-number'>{txt}</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='sub-number'>Stato medio di tassi reali, curva, inflazione e crescita.</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("**Sintesi blocchi (score)**")
+        for bkey, binfo in BLOCKS.items():
+            s = block_scores[bkey]["score"]
+            s_txt = "n/a" if np.isnan(s) else f"{s:.1f}"
+            st.write(f"- {binfo['name']}: **{s_txt}** {score_to_badge(s)}")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with col3:
-        risk_block = block_scores.get("risk", {}).get("score", np.nan)
-        fin_block = block_scores.get("fincond", {}).get("score", np.nan)
-        txt2 = "n/a"
-        if not np.isnan(risk_block) and not np.isnan(fin_block):
-            txt2 = f"{(risk_block + fin_block) / 2:.1f}"
+    with k3:
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
-        st.markdown("**Conditions & Risk appetite** (media)")
-        st.markdown(f"<div class='big-number'>{txt2}</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='sub-number'>Financial conditions, credito, vol e sentiment.</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("**Impatti operativi (heuristic)**")
+        st.write("- 🟢 Risk-on: ↑ equity risk budget, duration neutrale/leggera, ↑ credito (HY) con controllo rischio")
+        st.write("- 🟡 Neutrale: sizing moderato, preferenza per qualità, hedges medi")
+        st.write("- 🔴 Risk-off: ↓ equity, ↑ duration qualità, ↓ HY, ↑ hedges (cash/gold/USD)")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.caption("Nota: soglie regime (euristiche): <40 = Risk-off, 40–60 = Neutrale, >60 = Risk-on.")
-
-    # -------------- SEZIONI PER BLOCCHI --------------
+    # -------------- SEZIONI PER BLOCCHI (LAYOUT 2-UP) --------------
 
     for bkey, binfo in BLOCKS.items():
         st.markdown("<div class='section-separator'></div>", unsafe_allow_html=True)
@@ -758,65 +788,34 @@ def main():
 
         bscore = block_scores[bkey]["score"]
         bstatus = block_scores[bkey]["status"]
+        bscore_txt = "n/a" if np.isnan(bscore) else f"{bscore:.1f}"
+        st.write(f"**Block score:** {bscore_txt} {status_emoji(bstatus)} {status_label_it(bstatus)}")
 
-        colb1, colb2 = st.columns([1, 3])
-        with colb1:
-            st.markdown("**Block score**")
-            if np.isnan(bscore):
-                st.write("n/a")
-            else:
-                st.write(f"{bscore:.1f} {status_emoji(bstatus)} {status_label_it(bstatus)}")
-        with colb2:
-            st.write("")
+        for row in binfo.get("layout_rows", []):
+            if len(row) == 2:
+                c1, c2 = st.columns(2)
+                left_key, right_key = row
+                with c1:
+                    s = indicators.get(left_key, pd.Series(dtype=float))
+                    if s is None or s.empty:
+                        st.warning(f"Dati mancanti per {INDICATOR_META[left_key]['label']}.")
+                    else:
+                        render_indicator_tile(left_key, s, indicator_scores)
+                with c2:
+                    s = indicators.get(right_key, pd.Series(dtype=float))
+                    if s is None or s.empty:
+                        st.warning(f"Dati mancanti per {INDICATOR_META[right_key]['label']}.")
+                    else:
+                        render_indicator_tile(right_key, s, indicator_scores)
+            elif len(row) == 1:
+                only_key = row[0]
+                s = indicators.get(only_key, pd.Series(dtype=float))
+                if s is None or s.empty:
+                    st.warning(f"Dati mancanti per {INDICATOR_META[only_key]['label']}.")
+                else:
+                    render_indicator_tile(only_key, s, indicator_scores)
 
-        for ikey in binfo["indicators"]:
-            meta = INDICATOR_META.get(ikey)
-            if meta is None:
-                continue
-
-            series = indicators.get(ikey, pd.Series(dtype=float))
-            if series is None or series.empty:
-                st.warning(f"Dati mancanti per {meta['label']}.")
-                continue
-
-            score_info = indicator_scores.get(ikey, {})
-            score = score_info.get("score", np.nan)
-            status = score_info.get("status", "n/a")
-            latest = score_info.get("latest", np.nan)
-
-            delta_1m = pct_change_over_days(series, 30)
-            delta_6m = pct_change_over_days(series, 180)
-            delta_1y = pct_change_over_days(series, 365)
-
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.markdown(f"**{meta['label']}**")
-
-                with st.expander("Definizione & guida alla lettura", expanded=False):
-                    exp = meta["expander"]
-                    st.markdown(f"**Che metrica è**: {exp['what']}")
-                    st.markdown(f"**Valori di riferimento**: {exp['reference']}")
-                    st.markdown("**Interpretazione bidirezionale**:")
-                    st.markdown(exp["interpretation"])
-                    st.markdown(
-                        f"**Snapshot 1M / 6M / 1Y**: "
-                        f"{'n/a' if np.isnan(delta_1m) else f'{delta_1m:+.1f}%'} / "
-                        f"{'n/a' if np.isnan(delta_6m) else f'{delta_6m:+.1f}%'} / "
-                        f"{'n/a' if np.isnan(delta_1y) else f'{delta_1y:+.1f}%'}"
-                    )
-
-            with c2:
-                st.metric(
-                    label="Ultimo valore",
-                    value=fmt_value(latest, meta["unit"], meta.get("scale", 1.0)),
-                    delta=None if np.isnan(delta_1m) else f"{delta_1m:+.1f}% vs 1M",
-                )
-                score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
-                st.write(f"{status_emoji(status)} {status_label_it(status)} (score {score_txt})")
-
-            st.line_chart(series)
-
-    # -------------- WHAT CHANGED --------------
+    # -------------- WHAT CHANGED (COMPATTO) --------------
 
     st.markdown("<div class='section-separator'></div>", unsafe_allow_html=True)
     st.subheader("6) What changed – Δ 7d / 30d / 1Y")
@@ -844,14 +843,13 @@ def main():
     else:
         st.write("Nessun dato sufficiente per calcolare le variazioni.")
 
-    # -------------- REPORT / PAYLOAD PER CHATGPT --------------
+    # -------------- REPORT / PAYLOAD --------------
 
     st.markdown("<div class='section-separator'></div>", unsafe_allow_html=True)
     st.subheader("7) Report (opzionale) – Payload per ChatGPT")
 
     st.write(
-        "Questa sezione genera un payload testuale che puoi copiare e incollare in ChatGPT, "
-        "insieme a un prompt standard per ottenere un report operativo (senza usare API)."
+        "Genera un payload testuale copiabile per produrre un report operativo in ChatGPT (senza API)."
     )
 
     generate_payload = st.button("Generate payload")
@@ -894,31 +892,22 @@ def main():
         st.markdown("**Payload generato (copiabile):**")
         st.code(payload_text, language="yaml")
 
-        st.markdown("**Prompt suggerito per ChatGPT (da incollare sotto al payload):**")
+        st.markdown("**Prompt suggerito per ChatGPT:**")
         prompt_text = """
-Sei un macro strategist multi-asset. Ricevi il payload YAML qui sopra, generato dalla mia dashboard macro-finanziaria personale.
+Sei un macro strategist multi-asset. Ricevi il payload YAML sopra, generato dalla mia dashboard macro-finanziaria.
 
 Task:
-1. Leggi attentamente il payload e ricostruisci il **regime attuale** (Risk-on / Neutral / Risk-off) spiegando:
-   - ruolo di tassi reali, inflazione, curva, USD, credito, vol, equity, duration, oro
-   - coerenza o divergenze tra blocchi.
-
-2. Produci un **report operativo in italiano**, con sezioni:
-   1) Sintesi regime (max 5 bullet molto chiari)
-   2) Equity (ETF): quanto rischio posso prendere? (aumenti/riduzioni graduali di esposizione, tipo SPY/ACWI, factor ETF, EM vs DM)
-   3) Duration (bond ETF): preferenza per corta/media/lunga, tipo IEF/TLT, con motivazione
-   4) Credit risk (IG vs HY): mix suggerito tra LQD / HYG e commento sugli spread
-   5) Hedges: ruolo di USD, gold, cash-like (es. T-Bill ETF), se aumentare o ridurre
-   6) Segnali chiave “increase/decrease risk”: quali variabili monitorare nelle prossime 2–4 settimane, con soglie indicative.
-
-3. Sii **concreto e implementabile** per un investitore che usa solo ETF liquidi globali, senza usare leva o derivati. Usa toni prudenti, sottolinea che il regime è una guida probabilistica (non certezza) e che le soglie sono euristiche.
-
-Non aggiungere disclaimer legali lunghissimi: una breve nota finale è sufficiente.
+1) Ricostruisci il regime (Risk-on/Neutral/Risk-off) spiegando driver chiave (real rates, inflazione, curva, USD, credito, vol, equity, duration, oro).
+2) Produci un report operativo ETF-based:
+   - Equity exposure (aumenta/riduci rischio)
+   - Duration (corta/media/lunga)
+   - Credit risk (IG vs HY)
+   - Hedges (USD, gold, cash-like)
+   - 3–5 segnali da monitorare con soglie indicative.
+Tono concreto, implementabile, prudente. Soglie euristiche.
 """
         st.code(prompt_text, language="markdown")
 
 
 if __name__ == "__main__":
     main()
-
-
