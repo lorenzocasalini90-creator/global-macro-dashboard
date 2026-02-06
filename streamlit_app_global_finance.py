@@ -26,13 +26,14 @@ st.markdown(
         --card:#0f1629;
         --card2:#0c1324;
         --border:rgba(255,255,255,0.10);
-        --border2:rgba(255,255,255,0.14);
-        --muted:rgba(255,255,255,0.65);
-        --text:rgba(255,255,255,0.92);
+        --border2:rgba(255,255,255,0.18);
+        --muted:rgba(255,255,255,0.68);
+        --text:rgba(255,255,255,0.94);
+        --text2:rgba(255,255,255,0.88);
         --accent:rgba(99,102,241,1); /* indigo */
-        --good:rgba(34,197,94,1);    /* green */
-        --warn:rgba(245,158,11,1);   /* amber */
-        --bad:rgba(239,68,68,1);     /* red */
+        --good:rgba(34,197,94,1);
+        --warn:rgba(245,158,11,1);
+        --bad:rgba(239,68,68,1);
       }
 
       .stApp {
@@ -67,12 +68,12 @@ st.markdown(
         border: 1px solid var(--border);
         background: rgba(255,255,255,0.04);
         font-size: 0.85rem;
-        color: var(--text);
+        color: var(--text2);
         margin-right: 8px;
       }
-      .pill.good { border-color: rgba(34,197,94,0.40); background: rgba(34,197,94,0.12); }
-      .pill.warn { border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.12); }
-      .pill.bad  { border-color: rgba(239,68,68,0.40);  background: rgba(239,68,68,0.12); }
+      .pill.good { border-color: rgba(34,197,94,0.42); background: rgba(34,197,94,0.12); }
+      .pill.warn { border-color: rgba(245,158,11,0.42); background: rgba(245,158,11,0.12); }
+      .pill.bad  { border-color: rgba(239,68,68,0.42);  background: rgba(239,68,68,0.12); }
 
       .section-card {
         background: rgba(255,255,255,0.035);
@@ -95,9 +96,9 @@ st.markdown(
       .stPlotlyChart > div {
         border: 1px solid var(--border2);
         border-radius: 16px;
-        background: rgba(255,255,255,0.025);
-        padding: 8px 10px 4px 10px;
-        box-shadow: 0 14px 38px rgba(0,0,0,0.28);
+        background: rgba(255,255,255,0.022);
+        padding: 8px 10px 6px 10px;
+        box-shadow: 0 16px 44px rgba(0,0,0,0.30);
       }
 
       hr { border-color: var(--border); }
@@ -106,7 +107,7 @@ st.markdown(
       button[data-baseweb="tab"][aria-selected="true"]{ color: var(--text) !important; }
 
       .stDataFrame { border: 1px solid var(--border); border-radius: 12px; overflow:hidden; }
-      code { color: rgba(255,255,255,0.86); }
+      code { color: rgba(255,255,255,0.88); }
     </style>
     """,
     unsafe_allow_html=True,
@@ -117,9 +118,6 @@ st.markdown(
 # CONFIG: INDICATORS & BLOCKS
 # =========================
 
-# scoring modes:
-# - z5y: z-score vs last ~5y (market thermometers)
-# - pct20y: percentile vs last ~20y (structural/stock constraints)
 INDICATOR_META = {
     # 1) PRICE OF TIME
     "real_10y": {
@@ -331,12 +329,12 @@ INDICATOR_META = {
         "unit": "bn USD",
         "direction": +1,
         "source": "FRED WALCL (millions USD → bn USD)",
-        "scale": 1.0 / 1000.0,  # WALCL is in millions
+        "scale": 1.0 / 1000.0,
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
             "what": "Fed assets: system liquidity proxy (QE vs QT).",
-            "reference": "Expansion tends to support risk assets; contraction tends to drain liquidity.",
+            "reference": "Expansion supports risk assets; contraction drains liquidity (heuristics).",
             "interpretation": (
                 "- **Up** → more liquidity (tailwind).\n"
                 "- **Down** → liquidity drain (headwind)."
@@ -354,7 +352,7 @@ INDICATOR_META = {
         "scoring_mode": "z5y",
         "expander": {
             "what": "Reverse repo usage: liquidity parked risk-free.",
-            "reference": "Higher = liquidity 'stuck'; falling = liquidity released (heuristics).",
+            "reference": "Higher = liquidity stuck; falling = liquidity released (heuristics).",
             "interpretation": (
                 "- **Up** → less fuel for risk.\n"
                 "- **Down** → potential tailwind."
@@ -363,7 +361,7 @@ INDICATOR_META = {
         },
     },
 
-    # 5) DALIO CORE — DEBT & FISCAL DOMINANCE
+    # 5) DALIO CORE
     "interest_payments": {
         "label": "US Federal Interest Payments (Quarterly)",
         "unit": "bn USD",
@@ -446,7 +444,7 @@ INDICATOR_META = {
         "scoring_mode": "pct20y",
         "expander": {
             "what": "Term premium: compensation demanded to hold nominal duration.",
-            "reference": "Term premium up = long nominal duration less reliable (heuristic).",
+            "reference": "Up = long nominal duration less reliable (heuristic).",
             "interpretation": (
                 "- **Up** → higher risk in long nominal bonds.\n"
                 "- **Down** → duration becomes a better hedge again."
@@ -629,7 +627,6 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
 
 @st.cache_data(ttl=3600)
 def fetch_yf_one(ticker: str, start_date: str) -> pd.Series:
-    """Robust single-ticker fetch (avoids multi-ticker MultiIndex issues)."""
     try:
         df = yf.Ticker(ticker).history(start=start_date, auto_adjust=True)
         if df is None or df.empty:
@@ -654,7 +651,6 @@ def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
 # =========================
 
 def infer_frequency(series: pd.Series) -> str:
-    """Classify frequency by median index spacing."""
     if series is None:
         return "unknown"
     s = series.dropna()
@@ -665,7 +661,6 @@ def infer_frequency(series: pd.Series) -> str:
     if diffs.empty:
         return "unknown"
     med = float(diffs.median())
-
     if med <= 5:
         return "daily"
     if med <= 12:
@@ -712,56 +707,25 @@ def pct_change_by_periods(series: pd.Series, periods_back: int) -> float:
 
 def compute_deltas(series: pd.Series) -> dict:
     freq = infer_frequency(series)
-
     if freq in ("daily", "weekly", "unknown"):
-        return {
-            "freq": freq,
-            "label_a": "Δ7d",
-            "val_a": pct_change_by_days(series, 7),
-            "label_b": "Δ30d",
-            "val_b": pct_change_by_days(series, 30),
-            "label_c": "Δ1Y",
-            "val_c": pct_change_by_days(series, 365),
-        }
+        return {"freq": freq, "label_a": "Δ7d", "val_a": pct_change_by_days(series, 7),
+                "label_b": "Δ30d", "val_b": pct_change_by_days(series, 30),
+                "label_c": "Δ1Y", "val_c": pct_change_by_days(series, 365)}
     if freq == "monthly":
-        return {
-            "freq": freq,
-            "label_a": "Δ1M",
-            "val_a": pct_change_by_periods(series, 1),
-            "label_b": "Δ3M",
-            "val_b": pct_change_by_periods(series, 3),
-            "label_c": "Δ12M",
-            "val_c": pct_change_by_periods(series, 12),
-        }
+        return {"freq": freq, "label_a": "Δ1M", "val_a": pct_change_by_periods(series, 1),
+                "label_b": "Δ3M", "val_b": pct_change_by_periods(series, 3),
+                "label_c": "Δ12M", "val_c": pct_change_by_periods(series, 12)}
     if freq == "quarterly":
-        return {
-            "freq": freq,
-            "label_a": "Δ1Q",
-            "val_a": pct_change_by_periods(series, 1),
-            "label_b": "Δ4Q",
-            "val_b": pct_change_by_periods(series, 4),
-            "label_c": "Δ8Q",
-            "val_c": pct_change_by_periods(series, 8),
-        }
+        return {"freq": freq, "label_a": "Δ1Q", "val_a": pct_change_by_periods(series, 1),
+                "label_b": "Δ4Q", "val_b": pct_change_by_periods(series, 4),
+                "label_c": "Δ8Q", "val_c": pct_change_by_periods(series, 8)}
     if freq == "annual":
-        return {
-            "freq": freq,
-            "label_a": "Δ1Y",
-            "val_a": pct_change_by_periods(series, 1),
-            "label_b": "Δ3Y",
-            "val_b": pct_change_by_periods(series, 3),
-            "label_c": "Δ5Y",
-            "val_c": pct_change_by_periods(series, 5),
-        }
-    return {
-        "freq": freq,
-        "label_a": "Δ7d",
-        "val_a": pct_change_by_days(series, 7),
-        "label_b": "Δ30d",
-        "val_b": pct_change_by_days(series, 30),
-        "label_c": "Δ1Y",
-        "val_c": pct_change_by_days(series, 365),
-    }
+        return {"freq": freq, "label_a": "Δ1Y", "val_a": pct_change_by_periods(series, 1),
+                "label_b": "Δ3Y", "val_b": pct_change_by_periods(series, 3),
+                "label_c": "Δ5Y", "val_c": pct_change_by_periods(series, 5)}
+    return {"freq": freq, "label_a": "Δ7d", "val_a": pct_change_by_days(series, 7),
+            "label_b": "Δ30d", "val_b": pct_change_by_days(series, 30),
+            "label_c": "Δ1Y", "val_c": pct_change_by_days(series, 365)}
 
 
 def fmt_delta(val: float) -> str:
@@ -799,7 +763,7 @@ def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str
         p = rolling_percentile_last(hist, latest)
         if np.isnan(p):
             return np.nan, np.nan, latest
-        sig = (p - 0.5) * 4.0  # 0->-2, 0.5->0, 1->+2
+        sig = (p - 0.5) * 4.0
     else:
         if len(s) < 20:
             return np.nan, np.nan, latest
@@ -856,7 +820,7 @@ def fmt_value(val, unit: str, scale: float = 1.0):
 
 
 # =========================
-# DYNAMIC "SO-WHAT" TITLES (RULE-BASED, NO LLM)
+# DYNAMIC "SO-WHAT" TITLES
 # =========================
 
 def _trend_word(delta: float) -> str:
@@ -879,20 +843,7 @@ def _band_from_signal(sig: float) -> str:
     return "normal"
 
 
-def so_what_title(
-    key: str,
-    series: pd.Series,
-    indicator_scores: dict,
-    years_back: int,
-    meta: dict
-) -> str:
-    """
-    Produces a short, sharp, interpretation-oriented title based on:
-    - recent delta (freq-aware)
-    - above/below ref line (if any)
-    - signal band (z/percentile mapped)
-    - risk regime status
-    """
+def so_what_title(key: str, series: pd.Series, indicator_scores: dict, years_back: int, meta: dict) -> str:
     info = indicator_scores.get(key, {})
     status = info.get("status", "n/a")
     sig = info.get("signal", np.nan)
@@ -905,48 +856,36 @@ def so_what_title(
     band = _band_from_signal(sig)
     ref = meta.get("ref_line", None)
 
-    # reference context
     ref_ctx = ""
-    if ref is not None and (latest is not None) and not (isinstance(latest, float) and np.isnan(latest)):
+    if ref is not None and latest is not None and not (isinstance(latest, float) and np.isnan(latest)):
         try:
-            above = float(latest) > float(ref)
-            ref_ctx = f"{'above' if above else 'below'} ref"
+            ref_ctx = "above ref" if float(latest) > float(ref) else "below ref"
         except Exception:
             ref_ctx = ""
 
-    # map to "so-what" per indicator family (simple templates)
-    so = "watch"
+    # simple templates
+    so = "monitor"
     if key in ("real_10y", "nominal_10y"):
-        if trend == "rising":
-            so = "tightening headwind"
-        elif trend == "falling":
-            so = "easing tailwind"
-        else:
-            so = "rate pressure stable"
-        if key == "real_10y" and ref is not None:
-            so = so + (" (real yields >0 matter)" if ref_ctx.startswith("above") else " (real yields <0 supportive)")
+        so = "tightening headwind" if trend == "rising" else ("easing tailwind" if trend == "falling" else "rates steady")
+        if key == "real_10y" and ref_ctx:
+            so += " (real yields >0 bite)" if ref_ctx.startswith("above") else " (real yields <0 supportive)"
     elif key == "yield_curve_10_2":
-        so = "cycle stress if inverted" if (ref_ctx.startswith("below") or band == "low") else "cycle normalizing"
+        so = "cycle stress (inversion)" if (ref_ctx.startswith("below") or band == "low") else "cycle normalizing"
     elif key in ("breakeven_10y", "cpi_yoy"):
-        if trend == "rising":
-            so = "inflation constraint risk"
-        elif trend == "falling":
-            so = "disinflation supportive"
-        else:
-            so = "inflation steady"
-    elif key in ("usd_index",):
+        so = "inflation constraint risk" if trend == "rising" else ("disinflation supportive" if trend == "falling" else "inflation steady")
+    elif key == "usd_index":
         so = "global tightening" if trend == "rising" else ("conditions easing" if trend == "falling" else "USD steady")
-    elif key in ("hy_oas",):
+    elif key == "hy_oas":
         so = "credit stress building" if trend == "rising" else ("credit easing" if trend == "falling" else "credit stable")
-    elif key in ("vix",):
+    elif key == "vix":
         so = "risk premia up" if trend == "rising" else ("vol calming" if trend == "falling" else "vol stable")
-    elif key in ("spy_trend",):
+    elif key == "spy_trend":
         so = "risk-on confirmation" if (ref_ctx.startswith("above") or band == "high") else "risk-off warning"
-    elif key in ("hyg_lqd_ratio",):
+    elif key == "hyg_lqd_ratio":
         so = "risk appetite improving" if trend == "rising" else ("flight-to-quality" if trend == "falling" else "appetite steady")
-    elif key in ("fed_balance_sheet",):
+    elif key == "fed_balance_sheet":
         so = "liquidity tailwind" if trend == "rising" else ("liquidity drain" if trend == "falling" else "liquidity stable")
-    elif key in ("rrp",):
+    elif key == "rrp":
         so = "liquidity parked" if trend == "rising" else ("liquidity released" if trend == "falling" else "RRP stable")
     elif key in ("interest_to_receipts", "interest_payments", "deficit_gdp", "term_premium_10y", "current_account_gdp"):
         if key == "term_premium_10y":
@@ -954,38 +893,34 @@ def so_what_title(
         elif key == "interest_to_receipts":
             so = "fiscal constraint rising" if trend == "rising" else ("constraint easing" if trend == "falling" else "constraint stable")
         elif key == "deficit_gdp":
-            so = "supply pressure risk" if trend == "falling" else "deficit pressure"  # note: deficit series is negative; trend wording is still helpful
+            so = "deficit pressure" if trend != "flat" else "deficit stable"
         elif key == "current_account_gdp":
             so = "external reliance risk" if trend == "falling" else ("constraint easing" if trend == "rising" else "external steady")
         else:
             so = "debt stress risk" if trend == "rising" else ("stress easing" if trend == "falling" else "stress stable")
-    else:
-        so = "monitor"
 
-    # status tag
     status_tag = "Risk-on" if status == "risk_on" else ("Risk-off" if status == "risk_off" else ("Neutral" if status == "neutral" else "n/a"))
-
-    # keep it compact, top-left
-    # Example: "Real yields rising (Δ30d +X%) above ref → tightening headwind | Risk-off | 15Y"
     delta_txt = fmt_delta(d_mid)
     horizon_txt = f"{years_back}Y view"
+
     ctx_bits = []
-    if trend != "flat":
-        ctx_bits.append(f"{trend} ({d_mid_label} {delta_txt})")
+    ctx_bits.append(f"{trend} ({d_mid_label} {delta_txt})")
     if ref_ctx:
         ctx_bits.append(ref_ctx)
-    ctx = ", ".join(ctx_bits) if ctx_bits else f"{d_mid_label} {delta_txt}"
+    ctx = ", ".join(ctx_bits)
 
+    # Keep it short-ish
     return f"{so} — {ctx} | {status_tag} | {horizon_txt}"
 
 
 # =========================
-# PLOTTING (PREMIUM + TITLE TOP-LEFT)
+# PLOTTING (LEGIBILITY ENHANCED)
 # =========================
 
 def plot_premium(series: pd.Series, title: str, ref_line=None):
     s = series.dropna()
     fig = go.Figure()
+
     fig.add_trace(
         go.Scatter(
             x=s.index,
@@ -993,6 +928,7 @@ def plot_premium(series: pd.Series, title: str, ref_line=None):
             mode="lines",
             line=dict(width=2),
             name="",
+            hovertemplate="%{x|%Y-%m-%d}<br><b>%{y:.4f}</b><extra></extra>",
         )
     )
 
@@ -1001,45 +937,67 @@ def plot_premium(series: pd.Series, title: str, ref_line=None):
             y=float(ref_line),
             line_width=1,
             line_dash="dot",
-            opacity=0.70,
+            opacity=0.9,
+            line_color="rgba(255,255,255,0.28)",
         )
 
-    # Stronger axis lines for separation
-    fig.update_xaxes(
-        showgrid=True,
-        gridcolor="rgba(255,255,255,0.07)",
-        zeroline=False,
-        showline=True,
-        linecolor="rgba(255,255,255,0.12)",
-        linewidth=1,
-        ticks="outside",
-        tickcolor="rgba(255,255,255,0.10)",
-    )
-    fig.update_yaxes(
-        showgrid=True,
-        gridcolor="rgba(255,255,255,0.07)",
-        zeroline=False,
-        showline=True,
-        linecolor="rgba(255,255,255,0.12)",
-        linewidth=1,
-        ticks="outside",
-        tickcolor="rgba(255,255,255,0.10)",
-    )
-
+    # Improve readability: slightly stronger grid + white ticks + readable title
     fig.update_layout(
-        height=295,
-        margin=dict(l=10, r=10, t=48, b=8),
+        height=305,
+        margin=dict(l=12, r=12, t=62, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.02)",
         showlegend=False,
-        font=dict(color="rgba(255,255,255,0.86)"),
+        font=dict(color="rgba(255,255,255,0.90)"),
         title=dict(
             text=title,
             x=0.01, xanchor="left",
             y=0.98, yanchor="top",
-            font=dict(size=13),
+            font=dict(size=13, color="rgba(255,255,255,0.96)"),
         )
     )
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.10)",
+        zeroline=False,
+        showline=True,
+        linecolor="rgba(255,255,255,0.18)",
+        linewidth=1,
+        ticks="outside",
+        tickfont=dict(color="rgba(255,255,255,0.86)", size=11),
+        tickcolor="rgba(255,255,255,0.18)",
+        title=None,
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.10)",
+        zeroline=False,
+        showline=True,
+        linecolor="rgba(255,255,255,0.18)",
+        linewidth=1,
+        ticks="outside",
+        tickfont=dict(color="rgba(255,255,255,0.86)", size=11),
+        tickcolor="rgba(255,255,255,0.18)",
+        title=None,
+    )
+
+    # Add a subtle title backdrop for visibility (annotation with bg)
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.01, y=1.13,
+        text=title,
+        showarrow=False,
+        align="left",
+        font=dict(size=13, color="rgba(255,255,255,0.98)"),
+        bgcolor="rgba(0,0,0,0.35)",
+        bordercolor="rgba(255,255,255,0.20)",
+        borderwidth=1,
+        borderpad=6,
+    )
+    # Remove default title to avoid duplication (annotation is the visible title)
+    fig.update_layout(title_text="")
+
     return fig
 
 
@@ -1112,14 +1070,6 @@ def latest_value(indicator_scores: dict, key: str) -> float:
 
 
 def operating_lines(block_scores: dict, indicator_scores: dict):
-    """
-    4 decision-friendly lines:
-    - Equity risk budget
-    - Duration stance
-    - Credit stance
-    - Hedges
-    Uses: block scores (regime) + selected latest levels (CPI/breakeven) to avoid score≠level confusion.
-    """
     gs = block_scores.get("GLOBAL", {}).get("score", np.nan)
 
     def _sg(x):
@@ -1139,11 +1089,10 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         equity = "n/a"
 
-    # Duration stance: combine regime + inflation levels + term premium regime
     pot = _sg(block_scores.get("price_of_time", {}).get("score", np.nan))
     termp_score = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
-    cpi_latest = latest_value(indicator_scores, "cpi_yoy")  # LEVEL
-    breakeven_latest = latest_value(indicator_scores, "breakeven_10y")  # LEVEL
+    cpi_latest = latest_value(indicator_scores, "cpi_yoy")
+    breakeven_latest = latest_value(indicator_scores, "breakeven_10y")
 
     inflation_elevated = (not np.isnan(cpi_latest) and cpi_latest >= 3.0) or (not np.isnan(breakeven_latest) and breakeven_latest >= 2.7)
     inflation_benign = (not np.isnan(cpi_latest) and cpi_latest <= 2.6) and (np.isnan(breakeven_latest) or breakeven_latest <= 2.6)
@@ -1155,7 +1104,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         duration = "Neutral — balance term-premium risk vs cycle"
 
-    # Credit stance
     hy = _sg(indicator_scores.get("hy_oas", {}).get("score", np.nan))
     hyg = _sg(indicator_scores.get("hyg_lqd_ratio", {}).get("score", np.nan))
     ds = _sg(indicator_scores.get("interest_to_receipts", {}).get("score", np.nan))
@@ -1167,7 +1115,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         credit = "Neutral — quality tilt with selectivity"
 
-    # Hedges
     usd = _sg(indicator_scores.get("usd_index", {}).get("score", np.nan))
     dalio = _sg(block_scores.get("debt_fiscal", {}).get("score", np.nan))
 
@@ -1207,53 +1154,35 @@ def main():
     if fred_key is None:
         st.sidebar.error("⚠️ Missing `FRED_API_KEY` in Streamlit secrets.")
 
-    # Fetch data
     with st.spinner("Loading data (FRED + yfinance)..."):
         fred = {
-            # Price of time
             "real_10y": fetch_fred_series("DFII10", start_date),
             "nominal_10y": fetch_fred_series("DGS10", start_date),
             "dgs2": fetch_fred_series("DGS2", start_date),
-
-            # Macro
             "breakeven_10y": fetch_fred_series("T10YIE", start_date),
             "cpi_index": fetch_fred_series("CPIAUCSL", start_date),
             "unemployment_rate": fetch_fred_series("UNRATE", start_date),
-
-            # Conditions/Stress
             "hy_oas": fetch_fred_series("BAMLH0A0HYM2", start_date),
             "usd_fred": fetch_fred_series("DTWEXBGS", start_date),
-
-            # Plumbing
             "fed_balance_sheet": fetch_fred_series("WALCL", start_date),
             "rrp": fetch_fred_series("RRPONTSYD", start_date),
-
-            # Dalio: debt & fiscal
             "interest_payments": fetch_fred_series("A091RC1Q027SBEA", start_date),
             "federal_receipts": fetch_fred_series("FGRECPT", start_date),
             "deficit_gdp": fetch_fred_series("FYFSGDA188S", start_date),
             "term_premium_10y": fetch_fred_series("ACMTP10", start_date),
-
-            # External
             "current_account_gdp": fetch_fred_series("USAB6BLTT02STSAQ", start_date),
         }
 
         indicators = {}
 
-        # Yield curve derived
         if not fred["nominal_10y"].empty and not fred["dgs2"].empty:
             yc = fred["nominal_10y"].to_frame("10y").join(fred["dgs2"].to_frame("2y"), how="inner")
             indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
         else:
             indicators["yield_curve_10_2"] = pd.Series(dtype=float)
 
-        # CPI YoY
-        if not fred["cpi_index"].empty:
-            indicators["cpi_yoy"] = (fred["cpi_index"].pct_change(12) * 100.0).dropna()
-        else:
-            indicators["cpi_yoy"] = pd.Series(dtype=float)
+        indicators["cpi_yoy"] = (fred["cpi_index"].pct_change(12) * 100.0).dropna() if not fred["cpi_index"].empty else pd.Series(dtype=float)
 
-        # Direct FRED indicators
         indicators["real_10y"] = fred["real_10y"]
         indicators["nominal_10y"] = fred["nominal_10y"]
         indicators["breakeven_10y"] = fred["breakeven_10y"]
@@ -1261,15 +1190,12 @@ def main():
         indicators["hy_oas"] = fred["hy_oas"]
         indicators["fed_balance_sheet"] = fred["fed_balance_sheet"]
         indicators["rrp"] = fred["rrp"]
-
-        # Dalio indicators
         indicators["interest_payments"] = fred["interest_payments"]
         indicators["federal_receipts"] = fred["federal_receipts"]
         indicators["deficit_gdp"] = fred["deficit_gdp"]
         indicators["term_premium_10y"] = fred["term_premium_10y"]
         indicators["current_account_gdp"] = fred["current_account_gdp"]
 
-        # Derived ratio: interest / receipts
         ip = indicators.get("interest_payments", pd.Series(dtype=float))
         fr = indicators.get("federal_receipts", pd.Series(dtype=float))
         if ip is not None and fr is not None and (not ip.empty) and (not fr.empty):
@@ -1279,11 +1205,7 @@ def main():
         else:
             indicators["interest_to_receipts"] = pd.Series(dtype=float)
 
-        # yfinance
-        yf_map = fetch_yf_many(
-            ["DX-Y.NYB", "^VIX", "SPY", "HYG", "LQD", "URTH", "TLT", "GLD"],
-            start_date
-        )
+        yf_map = fetch_yf_many(["DX-Y.NYB", "^VIX", "SPY", "HYG", "LQD", "URTH", "TLT", "GLD"], start_date)
 
         dxy = yf_map.get("DX-Y.NYB", pd.Series(dtype=float))
         if dxy is None or dxy.empty:
@@ -1292,15 +1214,9 @@ def main():
 
         indicators["vix"] = yf_map.get("^VIX", pd.Series(dtype=float))
 
-        # SPY trend
         spy = yf_map.get("SPY", pd.Series(dtype=float))
-        if spy is not None and not spy.empty:
-            ma200 = spy.rolling(200).mean()
-            indicators["spy_trend"] = (spy / ma200).dropna()
-        else:
-            indicators["spy_trend"] = pd.Series(dtype=float)
+        indicators["spy_trend"] = (spy / spy.rolling(200).mean()).dropna() if spy is not None and not spy.empty else pd.Series(dtype=float)
 
-        # HYG/LQD ratio
         hyg = yf_map.get("HYG", pd.Series(dtype=float))
         lqd = yf_map.get("LQD", pd.Series(dtype=float))
         if hyg is not None and lqd is not None and (not hyg.empty) and (not lqd.empty):
@@ -1309,47 +1225,31 @@ def main():
         else:
             indicators["hyg_lqd_ratio"] = pd.Series(dtype=float)
 
-        # Cross confirmation
         indicators["world_equity"] = yf_map.get("URTH", pd.Series(dtype=float))
         indicators["duration_proxy_tlt"] = yf_map.get("TLT", pd.Series(dtype=float))
         indicators["gold"] = yf_map.get("GLD", pd.Series(dtype=float))
 
-    # Score indicators
     indicator_scores = {}
     for key, meta in INDICATOR_META.items():
         series = indicators.get(key, pd.Series(dtype=float))
         mode = meta.get("scoring_mode", "z5y")
         score, sig, latest = compute_indicator_score(series, meta["direction"], scoring_mode=mode)
-        indicator_scores[key] = {
-            "score": score,
-            "signal": sig,
-            "latest": latest,
-            "status": classify_status(score),
-            "mode": mode
-        }
+        indicator_scores[key] = {"score": score, "signal": sig, "latest": latest, "status": classify_status(score), "mode": mode}
 
-    # Score blocks + global
     block_scores = {}
     global_score = 0.0
     w_used = 0.0
 
     for bkey, binfo in BLOCKS.items():
         if bkey == "cross":
-            vals = []
-            for ikey in binfo["indicators"]:
-                sc = indicator_scores.get(ikey, {}).get("score", np.nan)
-                if not np.isnan(sc):
-                    vals.append(sc)
+            vals = [indicator_scores.get(ikey, {}).get("score", np.nan) for ikey in binfo["indicators"]]
+            vals = [v for v in vals if not np.isnan(v)]
             bscore = float(np.mean(vals)) if vals else np.nan
             block_scores[bkey] = {"score": bscore, "status": classify_status(bscore)}
             continue
 
-        vals = []
-        for ikey in binfo["indicators"]:
-            sc = indicator_scores.get(ikey, {}).get("score", np.nan)
-            if not np.isnan(sc):
-                vals.append(sc)
-
+        vals = [indicator_scores.get(ikey, {}).get("score", np.nan) for ikey in binfo["indicators"]]
+        vals = [v for v in vals if not np.isnan(v)]
         if vals:
             bscore = float(np.mean(vals))
             block_scores[bkey] = {"score": bscore, "status": classify_status(bscore)}
@@ -1362,43 +1262,27 @@ def main():
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
 
-    # Data freshness
-    latest_points = []
-    for s in indicators.values():
-        if s is not None and not s.empty:
-            latest_points.append(s.index.max())
+    latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
     data_max_date = max(latest_points) if latest_points else None
 
-    # Tabs
     tabs = st.tabs([
-        "Overview",
-        "1) Price of Time",
-        "2) Macro Cycle",
-        "3) Conditions & Stress",
-        "4) Liquidity (Plumbing)",
-        "5) Debt & Fiscal (Dalio)",
-        "6) External Balance",
-        "Cross Confirmation",
-        "What Changed",
-        "Report",
+        "Overview", "1) Price of Time", "2) Macro Cycle", "3) Conditions & Stress",
+        "4) Liquidity (Plumbing)", "5) Debt & Fiscal (Dalio)", "6) External Balance",
+        "Cross Confirmation", "What Changed", "Report"
     ])
 
-    # -------------------------
-    # Overview
-    # -------------------------
     with tabs[0]:
         left, right = st.columns([2, 1])
 
         with left:
-            # Risk-on/off legend (explicit, up front)
             st.markdown(
                 """
                 <div class="section-card">
                   <div class="tiny">
-                    <b>Risk-on / Neutral / Risk-off meaning (for ETF investors):</b><br/>
-                    🟢 <b>Risk-on</b>: conditions/liquidity support risk assets → higher equity budget, more credit tolerance, duration depends on inflation/term premium.<br/>
+                    <b>Risk-on / Neutral / Risk-off meaning (ETF lens):</b><br/>
+                    🟢 <b>Risk-on</b>: conditions + liquidity support risk assets → larger equity budget, more credit tolerance.<br/>
                     🟡 <b>Neutral</b>: mixed signals → moderate sizing, quality tilt, balanced hedges.<br/>
-                    🔴 <b>Risk-off</b>: stress/tightening dominates → lower equity beta, prefer IG/quality, increase hedges; be cautious with HY and long nominal duration when term premium/inflation are high.
+                    🔴 <b>Risk-off</b>: stress/tightening dominates → lower equity beta, prefer IG/quality, increase hedges (be cautious with HY and long nominals when inflation/term premium are high).
                   </div>
                 </div>
                 """,
@@ -1407,7 +1291,6 @@ def main():
 
             st.markdown("### Executive Snapshot (with Dalio layer)")
             gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
-
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
             def _btxt(k):
@@ -1454,7 +1337,7 @@ def main():
                     <div class="kpi-sub">
                       1) <b>Deficit ↑ → supply ↑ → term premium ↑ → duration suffers</b><br/>
                       2) <b>Term premium ↑ + USD ↑ → global tightening → risk-off</b><br/>
-                      3) <b>Debt service ↑ → political pressure → financial repression risk</b><br/>
+                      3) <b>Debt service ↑ → political pressure → repression risk</b><br/>
                       4) <b>Repression = compressed real rates → real assets hedge</b><br/>
                       5) <b>External deficits → foreign funding reliance → vulnerability</b>
                     </div>
@@ -1481,29 +1364,19 @@ def main():
                 f"<div class='tiny'>Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b></div>",
                 unsafe_allow_html=True
             )
-            st.markdown("<div class='tiny'>Tip: use <b>Refresh data</b> in the sidebar to force an update.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='tiny'>Tip: use <b>Refresh data</b> to force an update.</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
             with st.expander("How scoring works (z5y vs pct20y)", expanded=False):
                 st.markdown(
                     """
-- **Market thermometers** (USD, spreads, VIX, trend, real rates): **z-score ~5Y** (`z5y`) → clamp [-2,+2] → 0–100.
-- **Structural constraints** (debt/fiscal/external, term premium): **percentile ~20Y** (`pct20y`) mapped to [-2,+2] → 0–100.
-- Thresholds (heuristics): **>60 Risk-on**, **40–60 Neutral**, **<40 Risk-off**.
-- Global score = weighted average of the **6 core blocks** (Cross is confirmation only).
+- **Market thermometers**: **z-score ~5Y** (`z5y`) → clamp [-2,+2] → 0–100.
+- **Structural constraints**: **percentile ~20Y** (`pct20y`) mapped to [-2,+2] → 0–100.
+- Thresholds: **>60 Risk-on**, **40–60 Neutral**, **<40 Risk-off** (heuristics).
 - Chart titles are **rule-based “so-what” summaries** (no LLM, no extra APIs).
                     """
                 )
 
-            usd_series = indicators.get("usd_index", pd.Series(dtype=float))
-            if usd_series is None or usd_series.empty:
-                st.warning("USD index is empty: neither yfinance DXY nor FRED proxy is available.")
-            else:
-                st.caption("USD index: if yfinance DXY is missing, the dashboard uses FRED DTWEXBGS as a proxy.")
-
-    # -------------------------
-    # Block renderer
-    # -------------------------
     def render_block(block_key: str):
         b = BLOCKS[block_key]
         st.markdown(f"### {b['name']}")
@@ -1544,7 +1417,6 @@ def main():
                         else:
                             render_tile(key, s, indicator_scores, years_back)
 
-    # Block tabs
     with tabs[1]:
         render_block("price_of_time")
     with tabs[2]:
@@ -1560,9 +1432,6 @@ def main():
     with tabs[7]:
         render_block("cross")
 
-    # -------------------------
-    # What Changed
-    # -------------------------
     with tabs[8]:
         st.markdown("### What Changed (frequency-aware)")
         rows = []
@@ -1583,24 +1452,13 @@ def main():
                     "Regime": indicator_scores[key]["status"],
                 }
             )
-        if rows:
-            df = pd.DataFrame(rows).set_index("Indicator")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("Not enough data to compute changes.")
+        st.dataframe(pd.DataFrame(rows).set_index("Indicator"), use_container_width=True) if rows else st.info("Not enough data to compute changes.")
 
-    # -------------------------
-    # Report
-    # -------------------------
     with tabs[9]:
         st.markdown("### Report (optional) — AI-ready payload")
-        st.markdown(
-            "<div class='muted'>Copyable payload: includes Dalio blocks (Debt/Fiscal + External) and scoring modes to reduce false signals.</div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='muted'>Copyable payload for a multi-page memo with chart titles + so-what explanations.</div>", unsafe_allow_html=True)
 
         generate_payload = st.button("Generate payload")
-
         if generate_payload:
             payload_lines = []
             payload_lines.append("macro_regime_payload_dalio:")
@@ -1638,11 +1496,13 @@ def main():
                 series = indicators.get(key, pd.Series(dtype=float))
                 deltas = compute_deltas(series)
                 mode = meta.get("scoring_mode", "z5y")
+                title = so_what_title(key, series, indicator_scores, years_back, meta)
 
                 payload_lines.append(f"    - name: \"{meta['label']}\"")
                 payload_lines.append(f"      key: \"{key}\"")
                 payload_lines.append(f"      scoring_mode: \"{mode}\"")
                 payload_lines.append(f"      freq: \"{deltas['freq']}\"")
+                payload_lines.append(f"      chart_title: \"{title}\"")
                 payload_lines.append(f"      latest_value: \"{fmt_value(latest, meta['unit'], meta.get('scale', 1.0))}\"")
                 payload_lines.append(f"      score: {0.0 if np.isnan(score) else round(score, 1)}")
                 payload_lines.append(f"      status: {status}")
@@ -1650,33 +1510,19 @@ def main():
                 payload_lines.append(f"      change_b: \"{deltas['label_b']} {fmt_delta(deltas['val_b'])}\"")
                 payload_lines.append(f"      change_c: \"{deltas['label_c']} {fmt_delta(deltas['val_c'])}\"")
 
-            payload_text = "\n".join(payload_lines)
-            st.code(payload_text, language="yaml")
+            st.code("\n".join(payload_lines), language="yaml")
 
-            st.markdown("**Suggested prompt (Dalio-aware, report-ready):**")
+            st.markdown("**Suggested prompt:**")
             st.code(
                 """
-You are a multi-asset macro strategist. You receive the YAML payload above (Dalio-enhanced macro-finance dashboard).
+You are a multi-asset macro strategist. You receive the YAML payload above.
 
-Deliverable: an investor-ready memo (ETF-based), written for a non-specialist but sophisticated reader.
-
-Instructions:
-1) Separate the story into:
-   A) Market thermometers (USD, HY spreads, VIX, trend, real yields)
-   B) Structural constraints (debt service, deficit, term premium, external balance)
-2) Explain whether we are drifting into a structural regime shift:
-   - fiscal dominance / financial repression
-   - inflationary deleveraging
-   - credit-driven risk-off (classic)
-3) Produce the actionable section (ETF investor):
-   - Equity exposure (risk budget)
-   - Duration stance (short/neutral/long; nominal vs TIPS)
-   - Credit stance (IG vs HY)
-   - Hedges (USD, gold, cash-like)
-4) Provide 3–5 triggers to monitor over the next 2–6 weeks (with heuristic thresholds).
-5) For each core indicator, generate a sharp chart title and a 2–3 sentence “so-what” explanation.
-
-Tone: clear, concrete, implementable. Avoid jargon where possible.
+Write an investor-ready memo (ETF-based) that:
+1) Separates market thermometers vs structural constraints.
+2) Assesses regime risk (fiscal dominance / repression / inflationary deleveraging / classic credit risk-off).
+3) Gives an actionable allocation view (equity / duration / credit / hedges).
+4) Lists 3–5 near-term triggers.
+5) Uses each provided `chart_title` and adds a 2–3 sentence “so-what” under it.
                 """.strip(),
                 language="markdown"
             )
