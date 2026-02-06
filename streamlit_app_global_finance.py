@@ -45,6 +45,23 @@ st.markdown(
       h1, h2, h3, h4 { color: var(--text); letter-spacing: -0.02em; }
       .muted { color: var(--muted); }
 
+      /* Buttons readability (fix Generate payload / others) */
+      .stButton button {
+        background: rgba(255,255,255,0.06) !important;
+        color: rgba(255,255,255,0.92) !important;
+        border: 1px solid rgba(255,255,255,0.16) !important;
+        border-radius: 12px !important;
+        padding: 0.55rem 0.85rem !important;
+        font-weight: 650 !important;
+      }
+      .stButton button:hover {
+        border-color: rgba(255,255,255,0.30) !important;
+        background: rgba(255,255,255,0.085) !important;
+      }
+      .stButton button:active {
+        transform: translateY(1px);
+      }
+
       .kpi-grid {
         display:grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -70,6 +87,7 @@ st.markdown(
         font-size: 0.85rem;
         color: var(--text2);
         margin-right: 8px;
+        white-space: nowrap;
       }
       .pill.good { border-color: rgba(34,197,94,0.42); background: rgba(34,197,94,0.12); }
       .pill.warn { border-color: rgba(245,158,11,0.42); background: rgba(245,158,11,0.12); }
@@ -93,20 +111,62 @@ st.markdown(
         box-shadow: 0 16px 44px rgba(0,0,0,0.30);
       }
 
-      /* Compact tile for wallboard */
+      /* Wallboard macro-card (group container) */
+      .wb-macro {
+        background: rgba(255,255,255,0.032);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 18px;
+        padding: 12px 12px 10px 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+        margin-bottom: 14px;
+      }
+      .wb-macro-title { font-size: 1.02rem; font-weight: 780; color: var(--text); }
+      .wb-macro-sub { font-size: 0.86rem; color: var(--muted); margin-top: 4px; }
+
+      /* Compact tile for wallboard: fixed height for consistency */
       .wb-card {
         background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.025) 100%);
-        border: 1px solid var(--border);
+        border: 1px solid rgba(255,255,255,0.12);
         border-radius: 16px;
         padding: 12px 12px 10px 12px;
         box-shadow: 0 10px 28px rgba(0,0,0,0.24);
         margin-bottom: 10px;
+        min-height: 138px;   /* keeps grid aligned */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
       }
-      .wb-title { font-size: 0.92rem; font-weight: 700; color: var(--text); line-height: 1.2; }
-      .wb-meta  { font-size: 0.80rem; color: var(--muted); margin-top: 2px; }
-      .wb-row { display:flex; align-items:baseline; justify-content:space-between; gap: 10px; margin-top: 8px; }
-      .wb-big { font-size: 1.55rem; font-weight: 820; color: var(--text); letter-spacing: -0.01em; }
+      .wb-title {
+        font-size: 0.92rem; font-weight: 750; color: var(--text); line-height: 1.2;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 2.3em; /* stable title area */
+      }
+      .wb-meta  {
+        font-size: 0.80rem; color: var(--muted); margin-top: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 1.2em;
+      }
+      .wb-row { display:flex; align-items:flex-end; justify-content:space-between; gap: 10px; margin-top: 8px; }
+      .wb-big { font-size: 1.45rem; font-weight: 860; color: var(--text); letter-spacing: -0.01em; }
       .wb-small { font-size: 0.85rem; color: var(--muted); }
+
+      /* Deep-dive header stability */
+      .dd-title {
+        font-size: 1.0rem; font-weight: 700; color: var(--text); line-height: 1.15;
+        display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+        min-height: 1.2em;
+      }
+      .dd-meta {
+        color: var(--muted); font-size: 0.85rem;
+        display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+        min-height: 1.2em;
+      }
 
       hr { border-color: var(--border); }
       button[data-baseweb="tab"] { color: var(--muted) !important; }
@@ -115,9 +175,11 @@ st.markdown(
       .stDataFrame { border: 1px solid var(--border); border-radius: 12px; overflow:hidden; }
       code { color: rgba(255,255,255,0.88); }
 
-      /* A slightly more compact overall look on very wide screens */
-      @media (min-width: 1700px){
-        .block-container { padding-left: 1.2rem; padding-right: 1.2rem; }
+      /* Make toggle/checkbox rows align with theme */
+      .stCheckbox, .stToggle { color: rgba(255,255,255,0.90); }
+
+      @media (max-width: 768px){
+        .kpi-grid { grid-template-columns: 1fr; }
       }
     </style>
     """,
@@ -192,7 +254,7 @@ INDICATOR_META = {
         "unit": "%",
         "direction": -1,
         "source": "FRED T10YIE",
-        "scale": 1.0,
+        "scale": 1.0,  # harmless; avoids accidental edits. (Still 1.0)
         "ref_line": 2.5,
         "scoring_mode": "z5y",
         "expander": {
@@ -310,7 +372,7 @@ INDICATOR_META = {
             "reference": ">1 bull trend; <1 downtrend (heuristics).",
             "interpretation": (
                 "- **>1** → risk-on confirmation.\n"
-                "- **<1** → risk-off confirmation."
+                "- **<1** → risk-off warning."
             ),
             "dalio_bridge": "Trend down + credit stress up often marks deleveraging phases.",
         },
@@ -542,48 +604,13 @@ INDICATOR_META = {
 }
 
 BLOCKS = {
-    "price_of_time": {
-        "name": "1) Price of Time (Monetary Stance)",
-        "weight": 0.20,
-        "indicators": ["real_10y", "nominal_10y", "yield_curve_10_2"],
-        "desc": "Cost of capital and duration sensitivity.",
-    },
-    "macro": {
-        "name": "2) Macro Cycle (Inflation / Growth)",
-        "weight": 0.15,
-        "indicators": ["breakeven_10y", "cpi_yoy", "unemployment_rate"],
-        "desc": "Policy constraint: sticky inflation vs growth slowdown.",
-    },
-    "conditions": {
-        "name": "3) Financial Conditions & Stress (USD + Credit + Vol + Trend)",
-        "weight": 0.20,
-        "indicators": ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"],
-        "desc": "Global tightening: dollar, spreads, volatility, and trend.",
-    },
-    "plumbing": {
-        "name": "4) System Liquidity (Plumbing)",
-        "weight": 0.15,
-        "indicators": ["fed_balance_sheet", "rrp"],
-        "desc": "System liquidity: support vs drain for risk assets.",
-    },
-    "debt_fiscal": {
-        "name": "5) Dalio Core — Debt & Fiscal Dominance",
-        "weight": 0.20,
-        "indicators": ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"],
-        "desc": "Sovereign balance sheet + funding constraints.",
-    },
-    "external": {
-        "name": "6) External Balance — Who Funds Who",
-        "weight": 0.10,
-        "indicators": ["current_account_gdp"],
-        "desc": "External constraint under USD tightening.",
-    },
-    "cross": {
-        "name": "Cross-Asset Confirmation (Non-Weighted)",
-        "weight": 0.00,
-        "indicators": ["world_equity", "duration_proxy_tlt", "gold"],
-        "desc": "Cross-asset confirmation (does not affect global score).",
-    },
+    "price_of_time": {"name": "Price of Time", "weight": 0.20, "indicators": ["real_10y", "nominal_10y", "yield_curve_10_2"]},
+    "macro": {"name": "Macro Cycle", "weight": 0.15, "indicators": ["breakeven_10y", "cpi_yoy", "unemployment_rate"]},
+    "conditions": {"name": "Conditions & Stress", "weight": 0.20, "indicators": ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]},
+    "plumbing": {"name": "Liquidity / Plumbing", "weight": 0.15, "indicators": ["fed_balance_sheet", "rrp"]},
+    "debt_fiscal": {"name": "Debt & Fiscal (Dalio)", "weight": 0.20, "indicators": ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]},
+    "external": {"name": "External Balance", "weight": 0.10, "indicators": ["current_account_gdp"]},
+    "cross": {"name": "Cross Confirmation (Non-Weighted)", "weight": 0.00, "indicators": ["world_equity", "duration_proxy_tlt", "gold"]},
 }
 
 
@@ -605,12 +632,7 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
         return pd.Series(dtype=float)
 
     url = "https://api.stlouisfed.org/fred/series/observations"
-    params = {
-        "series_id": series_id,
-        "api_key": api_key,
-        "file_type": "json",
-        "observation_start": start_date,
-    }
+    params = {"series_id": series_id, "api_key": api_key, "file_type": "json", "observation_start": start_date}
     try:
         r = requests.get(url, params=params, timeout=12)
         r.raise_for_status()
@@ -635,9 +657,7 @@ def fetch_yf_one(ticker: str, start_date: str) -> pd.Series:
         df = yf.Ticker(ticker).history(start=start_date, auto_adjust=True)
         if df is None or df.empty:
             return pd.Series(dtype=float)
-        col = "Close"
-        if "Adj Close" in df.columns:
-            col = "Adj Close"
+        col = "Close" if "Close" in df.columns else df.columns[0]
         s = df[col].dropna()
         s.index = pd.to_datetime(s.index).tz_localize(None) if getattr(s.index, "tz", None) else pd.to_datetime(s.index)
         return s
@@ -805,6 +825,16 @@ def status_pill_html(status: str) -> str:
     return "<span class='pill'>⚪️ n/a</span>"
 
 
+def fmt_status_text(status: str) -> str:
+    if status == "risk_on":
+        return "Risk-on"
+    if status == "risk_off":
+        return "Risk-off"
+    if status == "neutral":
+        return "Neutral"
+    return "n/a"
+
+
 def fmt_value(val, unit: str, scale: float = 1.0):
     if val is None or (isinstance(val, float) and np.isnan(val)):
         return "n/a"
@@ -824,14 +854,10 @@ def fmt_value(val, unit: str, scale: float = 1.0):
 
 
 # =========================
-# RESAMPLING (FOR WALLBOARD / LONG HISTORY)
+# RESAMPLING (READABILITY + PERF)
 # =========================
 
 def downsample_series(series: pd.Series, years_back: int, mode: str) -> pd.Series:
-    """
-    mode: "wallboard" / "desktop" / "mobile"
-    We downsample mostly daily series for readability + performance.
-    """
     if series is None or series.empty:
         return series
     s = series.dropna()
@@ -840,17 +866,14 @@ def downsample_series(series: pd.Series, years_back: int, mode: str) -> pd.Serie
 
     freq = infer_frequency(s)
     if freq not in ("daily", "weekly"):
-        return s  # keep monthly/quarterly/annual as-is
+        return s
 
-    # choose target
+    rule = None
     if years_back >= 20:
         rule = "M"
     elif years_back >= 12:
         rule = "W"
-    else:
-        rule = None
 
-    # wallboard tends to benefit from fewer points
     if mode == "wallboard" and years_back >= 8:
         rule = "W" if rule is None else rule
 
@@ -858,19 +881,18 @@ def downsample_series(series: pd.Series, years_back: int, mode: str) -> pd.Serie
         return s
 
     try:
-        # Use last observation in period (more "market-like")
         return s.resample(rule).last().dropna()
     except Exception:
         return s
 
 
 # =========================
-# "SO-WHAT" TITLES (RULE-BASED)
+# RULE-BASED "SO-WHAT" TITLES
 # =========================
 
 def _trend_word(delta: float) -> str:
     if np.isnan(delta):
-        return "flat"
+        return "stable"
     if delta >= 1.0:
         return "rising"
     if delta <= -1.0:
@@ -937,15 +959,15 @@ def so_what_title(key: str, series: pd.Series, indicator_scores: dict, years_bac
         elif key == "interest_to_receipts":
             so = "fiscal constraint rising" if trend == "rising" else ("constraint easing" if trend == "falling" else "constraint stable")
         elif key == "deficit_gdp":
-            so = "deficit pressure" if trend != "flat" else "deficit stable"
+            so = "deficit pressure" if trend != "stable" else "deficit stable"
         elif key == "current_account_gdp":
             so = "external reliance risk" if trend == "falling" else ("constraint easing" if trend == "rising" else "external steady")
         else:
             so = "debt stress risk" if trend == "rising" else ("stress easing" if trend == "falling" else "stress stable")
 
-    status_tag = "Risk-on" if status == "risk_on" else ("Risk-off" if status == "risk_off" else ("Neutral" if status == "neutral" else "n/a"))
+    status_tag = fmt_status_text(status)
     delta_txt = fmt_delta(d_mid)
-    horizon_txt = f"{years_back}Y view"
+    horizon_txt = f"{years_back}Y"
 
     ctx_bits = [f"{trend} ({d_mid_label} {delta_txt})"]
     if ref_ctx:
@@ -1015,7 +1037,6 @@ def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 300
         tickcolor="rgba(255,255,255,0.18)",
     )
 
-    # Visible in-plot title (top-left), with backdrop
     fig.add_annotation(
         xref="paper", yref="paper",
         x=0.01, y=0.99,
@@ -1031,29 +1052,8 @@ def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 300
     return fig
 
 
-def sparkline(series: pd.Series, height: int = 90):
-    s = series.dropna()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=s.index, y=s.values,
-        mode="lines",
-        line=dict(width=2),
-        hoverinfo="skip"
-    ))
-    fig.update_layout(
-        height=height,
-        margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-    )
-    return fig
-
-
 # =========================
-# FULL TILE (DEEP DIVE)
+# DEEP DIVE TILE (CHART)
 # =========================
 
 def render_tile_full(key: str, series: pd.Series, indicator_scores: dict, years_back: int, layout_mode: str):
@@ -1072,13 +1072,13 @@ def render_tile_full(key: str, series: pd.Series, indicator_scores: dict, years_
     st.markdown("<div class='section-card'>", unsafe_allow_html=True)
     st.markdown(
         f"""
-        <div style='display:flex; align-items:baseline; justify-content:space-between; gap: 10px; margin-bottom: 6px;'>
-          <div>
-            <div style='font-size:1.0rem; font-weight:650; margin-bottom:2px;'>{meta["label"]}</div>
-            <div style='color:var(--muted); font-size:0.85rem; margin-bottom:8px;'>Source: {meta["source"]}</div>
+        <div style='display:flex; align-items:flex-start; justify-content:space-between; gap: 10px; margin-bottom: 6px;'>
+          <div style='min-width: 55%;'>
+            <div class='dd-title'>{meta["label"]}</div>
+            <div class='dd-meta'>Source: {meta["source"]}</div>
           </div>
           <div style='text-align:right'>
-            <div>{mode_badge}<span class='pill'>Latest: {latest_txt}</span>{status_pill_html(status)}</div>
+            <div style='margin-bottom:4px;'>{mode_badge}<span class='pill'>Latest: {latest_txt}</span>{status_pill_html(status)}</div>
             <div style='font-size:0.85rem; color:var(--muted);'>Score: {score_txt} · {deltas["label_b"]}: {fmt_delta(deltas["val_b"])}</div>
           </div>
         </div>
@@ -1100,7 +1100,6 @@ def render_tile_full(key: str, series: pd.Series, indicator_scores: dict, years_
             f"{deltas['label_c']} {fmt_delta(deltas['val_c'])}"
         )
 
-    # resample for performance / readability
     mode_key = "wallboard" if layout_mode == "Wallboard (55'')" else ("mobile" if layout_mode == "Mobile" else "desktop")
     s_plot = downsample_series(series, years_back, mode_key)
 
@@ -1116,7 +1115,7 @@ def render_tile_full(key: str, series: pd.Series, indicator_scores: dict, years_
 # WALLBOARD COMPACT TILE
 # =========================
 
-def render_tile_compact(key: str, series: pd.Series, indicator_scores: dict, years_back: int, show_spark: bool):
+def render_tile_compact(key: str, series: pd.Series, indicator_scores: dict, years_back: int):
     meta = INDICATOR_META[key]
     info = indicator_scores.get(key, {})
     score = info.get("score", np.nan)
@@ -1127,16 +1126,13 @@ def render_tile_compact(key: str, series: pd.Series, indicator_scores: dict, yea
     latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
     score_txt = "n/a" if np.isnan(score) else f"{score:.0f}"
 
-    # Slightly denser, screen-share friendly title
-    short_title = meta["label"]
-    if len(short_title) > 32:
-        short_title = short_title[:31] + "…"
-
     st.markdown("<div class='wb-card'>", unsafe_allow_html=True)
     st.markdown(
         f"""
-        <div class='wb-title'>{short_title}</div>
-        <div class='wb-meta'>{meta["source"]}</div>
+        <div>
+          <div class='wb-title'>{meta["label"]}</div>
+          <div class='wb-meta'>{meta["source"]}</div>
+        </div>
         <div class='wb-row'>
           <div class='wb-big'>{latest_txt}</div>
           <div style='text-align:right'>
@@ -1147,16 +1143,6 @@ def render_tile_compact(key: str, series: pd.Series, indicator_scores: dict, yea
         """,
         unsafe_allow_html=True
     )
-
-    if show_spark:
-        s_spark = downsample_series(series, years_back, "wallboard")
-        # keep last ~2 years for sparkline so it’s readable
-        if not s_spark.empty:
-            cutoff = s_spark.index.max() - pd.Timedelta(days=730)
-            s_spark = s_spark[s_spark.index >= cutoff]
-        if s_spark is not None and not s_spark.empty and len(s_spark) >= 5:
-            st.plotly_chart(sparkline(s_spark, height=90), use_container_width=True, config={"displayModeBar": False})
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1234,6 +1220,36 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
 
 
 # =========================
+# HELPERS: BLOCK LINES + GROUPS
+# =========================
+
+def fmt_block_line(block_key: str, block_scores: dict, label_override: str | None = None) -> str:
+    name = label_override if label_override is not None else BLOCKS[block_key]["name"]
+    sc = block_scores.get(block_key, {}).get("score", np.nan)
+    stt = block_scores.get(block_key, {}).get("status", "n/a")
+    sc_txt = "n/a" if np.isnan(sc) else f"{sc:.1f}"
+    return f"{name}: {fmt_status_text(stt)} ({sc_txt})"
+
+
+def render_macro_group(title: str, subtitle: str, keys: list[str], indicators: dict, indicator_scores: dict, cols_count: int = 4):
+    st.markdown("<div class='wb-macro'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='wb-macro-title'>{title}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='wb-macro-sub'>{subtitle}</div>", unsafe_allow_html=True)
+
+    rows = [keys[i:i+cols_count] for i in range(0, len(keys), cols_count)]
+    for r in rows:
+        cols = st.columns(len(r))
+        for c, k in zip(cols, r):
+            with c:
+                s = indicators.get(k, pd.Series(dtype=float))
+                if s is None or s.empty:
+                    st.warning(f"Missing: {INDICATOR_META[k]['label']}")
+                else:
+                    render_tile_compact(k, s, indicator_scores, years_back=999999)  # years_back not used here
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================
 # MAIN
 # =========================
 
@@ -1253,17 +1269,13 @@ def main():
     years_back = st.sidebar.slider("Historical window (years)", 5, 30, 15)
 
     st.sidebar.subheader("Layout")
-    layout_mode = st.sidebar.radio(
-        "View mode",
-        ["Desktop", "Mobile", "Wallboard (55'')"],
-        index=2
-    )
+    layout_mode = st.sidebar.radio("View mode", ["Desktop", "Mobile", "Wallboard (55'')"], index=2)
     mobile_mode = layout_mode == "Mobile"
     wallboard_mode = layout_mode == "Wallboard (55'')"
 
-    show_sparklines = False
-    if wallboard_mode:
-        show_sparklines = st.sidebar.checkbox("Wallboard: show sparklines", value=False)
+    st.sidebar.subheader("Wallboard")
+    show_all_indicators = st.sidebar.toggle("Show all indicators grid", value=False)
+    wall_cols = 4  # per your request
 
     today = datetime.now(timezone.utc).date()
     start_date = (today - DateOffset(years=years_back)).date().isoformat()
@@ -1294,15 +1306,12 @@ def main():
         }
 
         indicators = {}
-
-        # Derived: yield curve
         if not fred["nominal_10y"].empty and not fred["dgs2"].empty:
             yc = fred["nominal_10y"].to_frame("10y").join(fred["dgs2"].to_frame("2y"), how="inner")
             indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
         else:
             indicators["yield_curve_10_2"] = pd.Series(dtype=float)
 
-        # CPI YoY
         indicators["cpi_yoy"] = (fred["cpi_index"].pct_change(12) * 100.0).dropna() if not fred["cpi_index"].empty else pd.Series(dtype=float)
 
         # Direct
@@ -1366,7 +1375,6 @@ def main():
     block_scores = {}
     global_score = 0.0
     w_used = 0.0
-
     for bkey, binfo in BLOCKS.items():
         if bkey == "cross":
             vals = [indicator_scores.get(ikey, {}).get("score", np.nan) for ikey in binfo["indicators"]]
@@ -1394,13 +1402,7 @@ def main():
     data_max_date = max(latest_points) if latest_points else None
 
     # Tabs
-    tabs = st.tabs([
-        "Overview",
-        "Wallboard",
-        "Deep Dive (Charts)",
-        "What Changed",
-        "Report"
-    ])
+    tabs = st.tabs(["Overview", "Wallboard", "Deep Dive (Charts)", "What Changed", "Report"])
 
     # =========================
     # OVERVIEW
@@ -1427,19 +1429,16 @@ def main():
             gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-            def _btxt(k):
-                sc = block_scores.get(k, {}).get("score", np.nan)
-                stt = block_scores.get(k, {}).get("status", "n/a")
-                return status_pill_html(stt), ("n/a" if np.isnan(sc) else f"{sc:.1f}")
+            # Blocks tile: format requested (name: status (score))
+            block_lines = [
+                fmt_block_line("price_of_time", block_scores, "Price of Time"),
+                fmt_block_line("macro", block_scores, "Macro Cycle"),
+                fmt_block_line("conditions", block_scores, "Conditions & Stress"),
+                fmt_block_line("plumbing", block_scores, "Liquidity / Plumbing"),
+                fmt_block_line("debt_fiscal", block_scores, "Debt & Fiscal"),
+                fmt_block_line("external", block_scores, "External Balance"),
+            ]
 
-            p1_s, p1_v = _btxt("price_of_time")
-            p2_s, p2_v = _btxt("macro")
-            p3_s, p3_v = _btxt("conditions")
-            p4_s, p4_v = _btxt("plumbing")
-            p5_s, p5_v = _btxt("debt_fiscal")
-            p6_s, p6_v = _btxt("external")
-
-            # In mobile: avoid 3-wide grid
             if mobile_mode:
                 st.markdown(
                     f"""
@@ -1455,12 +1454,7 @@ def main():
                       </div>
                       <hr/>
                       <div class="kpi-sub">
-                        {p1_s} Price of Time: <b>{p1_v}</b><br/>
-                        {p2_s} Macro: <b>{p2_v}</b><br/>
-                        {p3_s} Conditions: <b>{p3_v}</b><br/>
-                        {p4_s} Plumbing: <b>{p4_v}</b><br/>
-                        {p5_s} Debt & Fiscal: <b>{p5_v}</b><br/>
-                        {p6_s} External: <b>{p6_v}</b>
+                        {"<br/>".join(block_lines)}
                       </div>
                     </div>
                     """,
@@ -1483,14 +1477,9 @@ def main():
                       </div>
 
                       <div class="kpi-card">
-                        <div class="kpi-title">Blocks (score)</div>
+                        <div class="kpi-title">Block scores (0–100)</div>
                         <div class="kpi-sub">
-                          {p1_s} Price of Time: <b>{p1_v}</b><br/>
-                          {p2_s} Macro Cycle: <b>{p2_v}</b><br/>
-                          {p3_s} Conditions & Stress: <b>{p3_v}</b><br/>
-                          {p4_s} Plumbing: <b>{p4_v}</b><br/>
-                          {p5_s} Debt & Fiscal: <b>{p5_v}</b><br/>
-                          {p6_s} External Balance: <b>{p6_v}</b>
+                          {"<br/>".join(block_lines)}
                         </div>
                       </div>
 
@@ -1509,24 +1498,16 @@ def main():
                     unsafe_allow_html=True
                 )
 
-            cross_sc = block_scores.get("cross", {}).get("score", np.nan)
-            cross_st = block_scores.get("cross", {}).get("status", "n/a")
-            cross_txt = "n/a" if np.isnan(cross_sc) else f"{cross_sc:.1f}"
-            st.markdown(
-                f"<div class='section-card'><div class='tiny'>Cross confirmation (non-weighted): <b>{cross_txt}</b> {status_pill_html(cross_st)}</div></div>",
-                unsafe_allow_html=True
-            )
-
         with right:
             st.markdown("### Info")
             now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             st.markdown("<div class='section-card'>", unsafe_allow_html=True)
-            st.markdown(f"<div class='tiny'>Now: <b>{now_utc}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='kpi-sub'>Now: <b>{now_utc}</b></div>", unsafe_allow_html=True)
             st.markdown(
-                f"<div class='tiny'>Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b></div>",
+                f"<div class='kpi-sub'>Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b></div>",
                 unsafe_allow_html=True
             )
-            st.markdown(f"<div class='tiny'>Layout mode: <b>{layout_mode}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='kpi-sub'>Layout mode: <b>{layout_mode}</b></div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
             with st.expander("How scoring works", expanded=False):
@@ -1539,28 +1520,25 @@ def main():
                 )
 
     # =========================
-    # WALLBOARD (tile-first)
+    # WALLBOARD
     # =========================
     with tabs[1]:
-        st.markdown("### Wallboard (tile-first)")
-        if not wallboard_mode:
-            st.info("Tip: switch **View mode** to **Wallboard (55'')** in the sidebar for the intended layout.")
+        st.markdown("### Wallboard (grouped, consistent)")
 
-        # Top strip: global + blocks
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-        def _btxt_simple(k):
-            sc = block_scores.get(k, {}).get("score", np.nan)
-            stt = block_scores.get(k, {}).get("status", "n/a")
-            return ("n/a" if np.isnan(sc) else f"{sc:.0f}"), status_pill_html(stt)
-
-        b1, b1s = _btxt_simple("price_of_time")
-        b2, b2s = _btxt_simple("macro")
-        b3, b3s = _btxt_simple("conditions")
-        b4, b4s = _btxt_simple("plumbing")
-        b5, b5s = _btxt_simple("debt_fiscal")
-        b6, b6s = _btxt_simple("external")
+        # Big tile: ordered block summary as requested, split by Thermometers vs Constraints
+        thermo_lines = [
+            fmt_block_line("price_of_time", block_scores, "Price of Time"),
+            fmt_block_line("macro", block_scores, "Macro Cycle"),
+            fmt_block_line("conditions", block_scores, "Conditions & Stress"),
+            fmt_block_line("plumbing", block_scores, "Liquidity / Plumbing"),
+        ]
+        constraint_lines = [
+            fmt_block_line("debt_fiscal", block_scores, "Debt & Fiscal"),
+            fmt_block_line("external", block_scores, "External Balance"),
+        ]
 
         st.markdown(
             f"""
@@ -1580,15 +1558,14 @@ def main():
                     <b>Hedges:</b> {hdg_line}
                   </div>
                 </div>
-                <div style="min-width:420px;">
-                  <div class="kpi-title">Blocks</div>
+                <div style="min-width:520px;">
+                  <div class="kpi-title">Block summary (name → regime → score)</div>
                   <div class="kpi-sub">
-                    {b1s} Price of Time: <b>{b1}</b> ·
-                    {b2s} Macro: <b>{b2}</b> ·
-                    {b3s} Conditions: <b>{b3}</b><br/>
-                    {b4s} Plumbing: <b>{b4}</b> ·
-                    {b5s} Debt/Fiscal: <b>{b5}</b> ·
-                    {b6s} External: <b>{b6}</b>
+                    <b>Market thermometers</b><br/>
+                    {"<br/>".join(thermo_lines)}
+                    <hr/>
+                    <b>Structural constraints</b><br/>
+                    {"<br/>".join(constraint_lines)}
                   </div>
                 </div>
               </div>
@@ -1597,60 +1574,83 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Choose number of columns for wallboard
-        cols_count = 6 if wallboard_mode else (4 if not mobile_mode else 1)
+        # Group tiles into macro-cards (4 columns fixed)
+        thermo_keys = ["real_10y", "usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]
+        plumbing_keys = ["fed_balance_sheet", "rrp"]
+        constraint_keys = ["term_premium_10y", "interest_to_receipts", "deficit_gdp", "current_account_gdp"]
 
-        # Wallboard key set (curated, 12 tiles)
-        core_keys = [
-            "real_10y", "usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio",
-            "term_premium_10y", "interest_to_receipts", "deficit_gdp", "fed_balance_sheet", "rrp", "current_account_gdp"
-        ]
+        def _render_group(title: str, subtitle: str, keys: list[str]):
+            st.markdown("<div class='wb-macro'>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wb-macro-title'>{title}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wb-macro-sub'>{subtitle}</div>", unsafe_allow_html=True)
 
-        rows = [core_keys[i:i+cols_count] for i in range(0, len(core_keys), cols_count)]
-        for r in rows:
-            cols = st.columns(len(r))
-            for c, k in zip(cols, r):
-                with c:
-                    s = indicators.get(k, pd.Series(dtype=float))
-                    if s is None or s.empty:
-                        st.warning(f"Missing: {INDICATOR_META[k]['label']}")
-                    else:
-                        render_tile_compact(k, s, indicator_scores, years_back, show_spark=show_sparklines)
-
-        # Optional: show "all indicators" wallboard grid
-        with st.expander("Show all indicators (wallboard grid)", expanded=False):
-            all_keys = [k for k in INDICATOR_META.keys()]
-            rows2 = [all_keys[i:i+cols_count] for i in range(0, len(all_keys), cols_count)]
-            for r in rows2:
-                cols = st.columns(len(r))
-                for c, k in zip(cols, r):
-                    with c:
-                        s = indicators.get(k, pd.Series(dtype=float))
-                        if s is None or s.empty:
-                            st.caption("n/a")
+            rows = [keys[i:i+wall_cols] for i in range(0, len(keys), wall_cols)]
+            for r in rows:
+                cols = st.columns(wall_cols)
+                # fill fixed slots with empty placeholders to keep positions consistent
+                for i in range(wall_cols):
+                    with cols[i]:
+                        if i < len(r):
+                            k = r[i]
+                            s = indicators.get(k, pd.Series(dtype=float))
+                            if s is None or s.empty:
+                                st.warning(f"Missing: {INDICATOR_META[k]['label']}")
+                            else:
+                                render_tile_compact(k, s, indicator_scores, years_back)
                         else:
-                            render_tile_compact(k, s, indicator_scores, years_back, show_spark=False)
+                            st.markdown("<div class='wb-card' style='opacity:0.0;'>.</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        _render_group(
+            "Market Thermometers",
+            "Fast-moving regime signals: rates, USD, credit stress, vol, trend, risk appetite.",
+            thermo_keys
+        )
+        _render_group(
+            "Liquidity / Plumbing",
+            "System liquidity: tailwind vs drain for risk assets.",
+            plumbing_keys
+        )
+        _render_group(
+            "Structural Constraints (Dalio)",
+            "Debt sustainability, term premium, and external funding constraint.",
+            constraint_keys
+        )
+
+        # Toggle instead of expander (fixes the “white bar” issue + consistency)
+        if show_all_indicators:
+            st.markdown("<div class='wb-macro'>", unsafe_allow_html=True)
+            st.markdown("<div class='wb-macro-title'>All indicators (grid)</div>", unsafe_allow_html=True)
+            st.markdown("<div class='wb-macro-sub'>Full set for completeness (still consistent tiles).</div>", unsafe_allow_html=True)
+
+            all_keys = list(INDICATOR_META.keys())
+            rows = [all_keys[i:i+wall_cols] for i in range(0, len(all_keys), wall_cols)]
+            for r in rows:
+                cols = st.columns(wall_cols)
+                for i in range(wall_cols):
+                    with cols[i]:
+                        if i < len(r):
+                            k = r[i]
+                            s = indicators.get(k, pd.Series(dtype=float))
+                            if s is None or s.empty:
+                                st.markdown("<div class='wb-card'><div class='wb-title'>n/a</div></div>", unsafe_allow_html=True)
+                            else:
+                                render_tile_compact(k, s, indicator_scores, years_back)
+                        else:
+                            st.markdown("<div class='wb-card' style='opacity:0.0;'>.</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # =========================
-    # DEEP DIVE (charts)
+    # DEEP DIVE
     # =========================
     with tabs[2]:
-        st.markdown("### Deep Dive (charts)")
-        st.markdown("<div class='muted'>Full charts + definitions. Use this tab when you want to explain the drivers.</div>", unsafe_allow_html=True)
+        st.markdown("### Deep Dive (Charts)")
+        st.markdown("<div class='muted'>Full charts + definitions. Designed for explanation of drivers.</div>", unsafe_allow_html=True)
 
-        # In desktop: block-by-block with 2 columns; in mobile: single column; in wallboard: use 4 columns for speed
+        ncols = 1 if mobile_mode else 2
         for bkey, binfo in BLOCKS.items():
             st.markdown(f"#### {binfo['name']}")
-            st.markdown(f"<div class='muted'>{binfo['desc']}</div>", unsafe_allow_html=True)
-
             keys = binfo["indicators"]
-            if mobile_mode:
-                ncols = 1
-            elif wallboard_mode:
-                ncols = 2  # charts are heavy; keep 2-wide even on 55''
-            else:
-                ncols = 2
-
             rows = [keys[i:i+ncols] for i in range(0, len(keys), ncols)]
             for r in rows:
                 cols = st.columns(len(r))
@@ -1661,7 +1661,6 @@ def main():
                             st.warning(f"Missing: {INDICATOR_META[k]['label']}")
                         else:
                             render_tile_full(k, s, indicator_scores, years_back, layout_mode)
-
             st.markdown("---")
 
     # =========================
@@ -1669,6 +1668,42 @@ def main():
     # =========================
     with tabs[3]:
         st.markdown("### What Changed (frequency-aware)")
+
+        st.markdown(
+            """
+            <div class="section-card">
+              <div class="kpi-sub">
+                <b>How to read:</b><br/>
+                - <b>Freq</b> tells you if the series is daily/monthly/quarterly → deltas are chosen accordingly (e.g., Δ1Q/Δ4Q for quarterly).<br/>
+                - <b>Δ columns</b> show recent change on the right horizon for that frequency (avoid comparing apples and oranges).<br/>
+                - <b>Score & Regime</b> translate level vs history into a simple risk-on/off signal (heuristic, not a forecast).
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        with st.expander("Column guide (why each column is here)", expanded=False):
+            st.markdown(
+                """
+- **Indicator**: what you’re looking at (short name for readability).
+- **Group**: Thermometer / Plumbing / Constraint / Cross — helps quickly interpret role.
+- **Freq**: data frequency (daily/monthly/quarterly). Deltas adapt to frequency.
+- **ΔA / ΔB / ΔC**: recent changes over the “right” horizon for that frequency.
+- **Score**: 0–100 composite level vs history (z5y or pct20y).
+- **Regime**: bucketed score: Risk-on / Neutral / Risk-off.
+                """
+            )
+
+        def group_for_key(k: str) -> str:
+            if k in ("real_10y", "nominal_10y", "yield_curve_10_2", "breakeven_10y", "cpi_yoy", "unemployment_rate", "usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"):
+                return "Thermometer"
+            if k in ("fed_balance_sheet", "rrp"):
+                return "Plumbing"
+            if k in ("interest_payments", "federal_receipts", "interest_to_receipts", "deficit_gdp", "term_premium_10y", "current_account_gdp"):
+                return "Constraint"
+            return "Cross"
+
         rows = []
         for key, meta in INDICATOR_META.items():
             s = indicators.get(key, pd.Series(dtype=float))
@@ -1677,17 +1712,40 @@ def main():
             deltas = compute_deltas(s)
             rows.append(
                 {
-                    "Indicator": meta["label"],
+                    "Indicator": (meta["label"][:46] + "…") if len(meta["label"]) > 46 else meta["label"],
+                    "Group": group_for_key(key),
                     "Scoring": meta.get("scoring_mode", "z5y"),
                     "Freq": deltas["freq"],
                     deltas["label_a"]: None if np.isnan(deltas["val_a"]) else round(deltas["val_a"], 2),
                     deltas["label_b"]: None if np.isnan(deltas["val_b"]) else round(deltas["val_b"], 2),
                     deltas["label_c"]: None if np.isnan(deltas["val_c"]) else round(deltas["val_c"], 2),
                     "Score": None if np.isnan(indicator_scores[key]["score"]) else round(indicator_scores[key]["score"], 1),
-                    "Regime": indicator_scores[key]["status"],
+                    "Regime": fmt_status_text(indicator_scores[key]["status"]),
                 }
             )
-        st.dataframe(pd.DataFrame(rows).set_index("Indicator"), use_container_width=True) if rows else st.info("Not enough data to compute changes.")
+
+        if rows:
+            df = pd.DataFrame(rows)
+
+            # Make table easier to read by sorting by "Group" then "Score"
+            df = df.sort_values(by=["Group", "Score"], ascending=[True, True], na_position="last")
+
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            st.markdown(
+                """
+                <div class="section-card">
+                  <div class="kpi-sub">
+                    <b>What this table is for:</b><br/>
+                    Use it as a “change scanner” to spot what is <i>moving</i> (ΔB) and what is <i>structurally constrained</i> (Score/Regime).
+                    A typical workflow is: (1) scan Thermometers for near-term regime shift, (2) check Constraints for whether the regime is “fragile”, (3) confirm with Deep Dive charts.
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("Not enough data to compute changes.")
 
     # =========================
     # REPORT
@@ -1701,7 +1759,7 @@ def main():
             payload_lines.append("macro_regime_payload_dalio:")
             payload_lines.append(f"  generated_at_utc: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
             payload_lines.append(f"  global_score: {0.0 if np.isnan(global_score) else round(global_score, 1)}")
-            payload_lines.append(f"  global_status: {global_status}")
+            payload_lines.append(f"  global_status: {fmt_status_text(global_status)}")
             payload_lines.append("  scoring_notes: \"market thermometers use z5y; structural constraints use pct20y\"")
             payload_lines.append(f"  horizon_years: {years_back}")
             payload_lines.append(f"  layout_mode: \"{layout_mode}\"")
@@ -1716,7 +1774,7 @@ def main():
                 payload_lines.append(f"      name: \"{binfo['name']}\"")
                 payload_lines.append(f"      weight: {binfo['weight']}")
                 payload_lines.append(f"      score: {0.0 if np.isnan(bscore) else round(bscore, 1)}")
-                payload_lines.append(f"      status: {bstatus}")
+                payload_lines.append(f"      status: \"{fmt_status_text(bstatus)}\"")
 
             payload_lines.append("  operating_lines:")
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
@@ -1743,7 +1801,7 @@ def main():
                 payload_lines.append(f"      chart_title: \"{title}\"")
                 payload_lines.append(f"      latest_value: \"{fmt_value(latest, meta['unit'], meta.get('scale', 1.0))}\"")
                 payload_lines.append(f"      score: {0.0 if np.isnan(score) else round(score, 1)}")
-                payload_lines.append(f"      status: {status}")
+                payload_lines.append(f"      status: \"{fmt_status_text(status)}\"")
                 payload_lines.append(f"      change_a: \"{deltas['label_a']} {fmt_delta(deltas['val_a'])}\"")
                 payload_lines.append(f"      change_b: \"{deltas['label_b']} {fmt_delta(deltas['val_b'])}\"")
                 payload_lines.append(f"      change_c: \"{deltas['label_c']} {fmt_delta(deltas['val_c'])}\"")
