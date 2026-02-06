@@ -13,7 +13,7 @@ from pandas.tseries.offsets import DateOffset
 # =========================
 
 st.set_page_config(
-    page_title="Global finance | Macro overview (Dalio-enhanced)",
+    page_title="Global Finance | Macro Overview (Dalio-Enhanced)",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -25,7 +25,8 @@ st.markdown(
         --bg:#0b0f19;
         --card:#0f1629;
         --card2:#0c1324;
-        --border:rgba(255,255,255,0.08);
+        --border:rgba(255,255,255,0.10);
+        --border2:rgba(255,255,255,0.14);
         --muted:rgba(255,255,255,0.65);
         --text:rgba(255,255,255,0.92);
         --accent:rgba(99,102,241,1); /* indigo */
@@ -49,7 +50,7 @@ st.markdown(
         gap: 14px;
       }
       .kpi-card {
-        background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%);
+        background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
         border: 1px solid var(--border);
         border-radius: 16px;
         padding: 16px 16px 12px 16px;
@@ -69,9 +70,9 @@ st.markdown(
         color: var(--text);
         margin-right: 8px;
       }
-      .pill.good { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.10); }
-      .pill.warn { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.10); }
-      .pill.bad  { border-color: rgba(239,68,68,0.35);  background: rgba(239,68,68,0.10); }
+      .pill.good { border-color: rgba(34,197,94,0.40); background: rgba(34,197,94,0.12); }
+      .pill.warn { border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.12); }
+      .pill.bad  { border-color: rgba(239,68,68,0.40);  background: rgba(239,68,68,0.12); }
 
       .section-card {
         background: rgba(255,255,255,0.035);
@@ -81,6 +82,7 @@ st.markdown(
         box-shadow: 0 8px 24px rgba(0,0,0,0.18);
         margin-bottom: 12px;
       }
+
       .tile-title { font-size: 1.0rem; font-weight: 650; margin-bottom: 2px; }
       .tile-meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
       .tile-toprow {
@@ -88,6 +90,15 @@ st.markdown(
         margin-bottom: 6px;
       }
       .tiny { font-size: 0.85rem; color: var(--muted); }
+
+      /* Stronger visual separation for charts */
+      .stPlotlyChart > div {
+        border: 1px solid var(--border2);
+        border-radius: 16px;
+        background: rgba(255,255,255,0.025);
+        padding: 8px 10px 4px 10px;
+        box-shadow: 0 14px 38px rgba(0,0,0,0.28);
+      }
 
       hr { border-color: var(--border); }
 
@@ -103,18 +114,16 @@ st.markdown(
 
 
 # =========================
-# CONFIG: INDICATORS & BLOCKS (DALIO-ENHANCED)
+# CONFIG: INDICATORS & BLOCKS
 # =========================
 
-# Scoring modes:
+# scoring modes:
 # - z5y: z-score vs last ~5y (market thermometers)
 # - pct20y: percentile vs last ~20y (structural/stock constraints)
 INDICATOR_META = {
-    # -------------------------
-    # BLOCCO 1 — PRICE OF TIME
-    # -------------------------
+    # 1) PRICE OF TIME
     "real_10y": {
-        "label": "US 10Y TIPS real yield",
+        "label": "US 10Y TIPS Real Yield",
         "unit": "%",
         "direction": -1,
         "source": "FRED DFII10",
@@ -122,17 +131,17 @@ INDICATOR_META = {
         "ref_line": 0.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Rendimento reale (TIPS 10Y): prezzo del tempo al netto dell’inflazione attesa.",
-            "reference": "<0% molto accomodante; 0–2% neutrale; >2% restrittivo (euristiche).",
+            "what": "10Y real yield (TIPS): the price of time net of inflation expectations.",
+            "reference": "<0% very easy; 0–2% neutral; >2% restrictive (heuristics).",
             "interpretation": (
-                "- **↑ real yield** → headwind equity (growth) e duration lunga.\n"
-                "- **↓ real yield** → tailwind risk assets e duration più difensiva."
+                "- **Real yield up** → headwind for equities (especially growth) and long duration.\n"
+                "- **Real yield down** → tailwind for risk assets; duration more defensive."
             ),
-            "dalio_bridge": "Real yield ↑ stringe il vincolo di funding per tutti (costo reale capitale).",
+            "dalio_bridge": "Higher real yields tighten the funding constraint system-wide.",
         },
     },
     "nominal_10y": {
-        "label": "US 10Y nominal yield",
+        "label": "US 10Y Nominal Yield",
         "unit": "%",
         "direction": -1,
         "source": "FRED DGS10",
@@ -140,39 +149,37 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Rendimento nominale Treasury 10Y: costo del capitale e benchmark per sconto cash flow.",
-            "reference": "Movimenti rapidi verso l’alto spesso equivalgono a tightening finanziario.",
+            "what": "10Y Treasury nominal yield: benchmark discount rate and broad financial conditions.",
+            "reference": "Fast moves higher often translate into financial tightening.",
             "interpretation": (
-                "- **↑ rapido** → pressione su equity e bond esistenti.\n"
-                "- **↓** → supporto a duration e spesso a equity (dipende dal contesto macro)."
+                "- **Up fast** → pressure on equities and existing bonds.\n"
+                "- **Down** → supports duration; equities benefit if it’s not growth collapsing."
             ),
-            "dalio_bridge": "Yield ↑ = mercato chiede più compenso (o inflazione, o term premium, o entrambe).",
+            "dalio_bridge": "Higher yields can reflect inflation, term premium, or both.",
         },
     },
     "yield_curve_10_2": {
-        "label": "US Yield curve (10Y–2Y)",
+        "label": "US Yield Curve (10Y–2Y)",
         "unit": "pp",
         "direction": +1,
-        "source": "FRED DGS10 - DGS2",
+        "source": "Derived (DGS10 - DGS2)",
         "scale": 1.0,
         "ref_line": 0.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Differenza 10Y–2Y: proxy ciclo/attese recessione.",
-            "reference": "<0 curva invertita (late cycle); >0 curva normale (euristiche).",
+            "what": "10Y–2Y slope: cycle proxy (growth expectations vs policy stance).",
+            "reference": "<0 inverted (late cycle); >0 normal (heuristics).",
             "interpretation": (
-                "- **Molto negativa** e persistente → rischio recessione / risk-off.\n"
-                "- **Ritorno sopra 0** → normalizzazione del ciclo."
+                "- **Deeply negative** and persistent → higher recession risk / risk-off.\n"
+                "- **Re-steepening above 0** → cycle normalization."
             ),
-            "dalio_bridge": "Curva invertita = policy restrittiva rispetto al ciclo → aumenta probabilità di deleveraging.",
+            "dalio_bridge": "Inversion often precedes deleveraging phases as policy stays tight vs the cycle.",
         },
     },
 
-    # -------------------------
-    # BLOCCO 2 — MACRO (INFLATION/GROWTH)
-    # -------------------------
+    # 2) MACRO CYCLE
     "breakeven_10y": {
-        "label": "10Y Breakeven inflation",
+        "label": "10Y Breakeven Inflation",
         "unit": "%",
         "direction": -1,
         "source": "FRED T10YIE",
@@ -180,35 +187,35 @@ INDICATOR_META = {
         "ref_line": 2.5,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Inflazione attesa (10Y) implicita dal mercato: nominali vs TIPS.",
-            "reference": "~2–3% = ben ancorata; molto >3% = rischio inflazione sticky (euristiche).",
+            "what": "Market-implied inflation expectation (10Y): nominal vs TIPS.",
+            "reference": "~2–3% anchored; >3% sticky inflation risk (heuristics).",
             "interpretation": (
-                "- **↑** → rischio policy restrittiva più a lungo.\n"
-                "- **↓ verso target** → più spazio per easing."
+                "- **Up** → higher risk of restrictive policy for longer.\n"
+                "- **Down toward target** → more room for easing."
             ),
-            "dalio_bridge": "Inflazione attesa ↑ rende più probabile repressione finanziaria (tassi reali compressi) in stress.",
+            "dalio_bridge": "Higher inflation expectations increase the odds of financial repression in debt stress.",
         },
     },
     "cpi_yoy": {
         "label": "US CPI YoY",
         "unit": "%",
         "direction": -1,
-        "source": "FRED CPIAUCSL (YoY calcolato)",
+        "source": "FRED CPIAUCSL (YoY computed)",
         "scale": 1.0,
         "ref_line": 3.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Inflazione headline YoY (proxy).",
-            "reference": "Target 2% (Fed); >3–4% a lungo = sticky (euristiche).",
+            "what": "Headline inflation YoY (proxy).",
+            "reference": "Fed target ~2%; sustained >3–4% = sticky (heuristics).",
             "interpretation": (
-                "- **Disinflation** → supportive per duration ed equity.\n"
-                "- **Re-acceleration** → rischio tightening / tassi più alti più a lungo."
+                "- **Disinflation** → supportive for duration and (often) equities.\n"
+                "- **Re-acceleration** → tightening risk / higher-for-longer."
             ),
-            "dalio_bridge": "Inflazione persistente = vincolo primario di policy (meno spazio per rescue del credito).",
+            "dalio_bridge": "Persistent inflation is the key constraint: less room for bailouts.",
         },
     },
     "unemployment_rate": {
-        "label": "US Unemployment rate",
+        "label": "US Unemployment Rate",
         "unit": "%",
         "direction": -1,
         "source": "FRED UNRATE",
@@ -216,21 +223,19 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Disoccupazione USA: proxy crescita / ciclo.",
-            "reference": "Salite rapide spesso associano slowdown/recessione.",
+            "what": "Labor slack proxy: cycle and recession probability.",
+            "reference": "Fast rises often coincide with slowdown/recession.",
             "interpretation": (
-                "- **↑ veloce** → rischio recessionario (risk-off).\n"
-                "- **Stabile** → contesto più benigno."
+                "- **Up quickly** → growth scare / risk-off.\n"
+                "- **Stable** → more benign backdrop."
             ),
-            "dalio_bridge": "Slack ↑ + debito alto = pressioni politiche per policy di supporto (dominanza fiscale più probabile).",
+            "dalio_bridge": "Slack rising with high debt increases political pressure for support (fiscal dominance risk).",
         },
     },
 
-    # -------------------------
-    # BLOCCO 3 — FINANCIAL CONDITIONS & STRESS
-    # -------------------------
+    # 3) CONDITIONS & STRESS
     "usd_index": {
-        "label": "USD index (DXY / FRED proxy)",
+        "label": "USD Index (DXY / Broad Proxy)",
         "unit": "",
         "direction": -1,
         "source": "yfinance DX-Y.NYB (fallback FRED DTWEXBGS)",
@@ -238,13 +243,13 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Misura di forza del dollaro. Se DXY non è disponibile, usa proxy FRED broad dollar index.",
-            "reference": "USD forte = condizioni globali più strette (euristico).",
+            "what": "Dollar strength proxy. If DXY is missing, uses FRED broad trade-weighted USD index.",
+            "reference": "Strong USD = tighter global financial conditions (heuristic).",
             "interpretation": (
-                "- **USD ↑** → tightening globale / pressione su risk asset.\n"
-                "- **USD ↓** → condizioni più accomodanti."
+                "- **USD up** → global tightening / pressure on risk assets.\n"
+                "- **USD down** → easier conditions."
             ),
-            "dalio_bridge": "USD ↑ = funding stress globale ↑ (leva e debito in USD diventano più pesanti).",
+            "dalio_bridge": "USD up = global funding stress up (especially for USD debt).",
         },
     },
     "hy_oas": {
@@ -256,13 +261,13 @@ INDICATOR_META = {
         "ref_line": 4.5,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Spread HY (OAS): stress creditizio e rischio default percepito.",
-            "reference": "<4% spesso benigno; >6–7% stress (euristiche).",
+            "what": "High yield spread: credit stress / default risk pricing.",
+            "reference": "<4% often benign; >6–7% stress (heuristics).",
             "interpretation": (
-                "- **↑** → risk-off (credit stress).\n"
-                "- **↓** → risk appetite."
+                "- **Up** → risk-off (credit stress).\n"
+                "- **Down** → risk appetite improves."
             ),
-            "dalio_bridge": "Credit stress ↑ accelera deleveraging (non-lineare).",
+            "dalio_bridge": "Credit stress up accelerates deleveraging (non-linear).",
         },
     },
     "vix": {
@@ -274,17 +279,17 @@ INDICATOR_META = {
         "ref_line": 20.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Volatilità implicita S&P 500.",
-            "reference": "<15 basso; 15–25 normale; >25 stress (euristiche).",
+            "what": "S&P 500 implied volatility.",
+            "reference": "<15 low; 15–25 normal; >25 stress (heuristics).",
             "interpretation": (
-                "- **↑** → risk-off.\n"
-                "- **↓** → risk-on."
+                "- **Up** → risk-off.\n"
+                "- **Down** → risk-on."
             ),
-            "dalio_bridge": "Vol ↑ = condizioni finanziarie stringono anche senza rialzi tassi (risk premium ↑).",
+            "dalio_bridge": "Higher vol tightens conditions even without policy hikes (risk premia up).",
         },
     },
     "spy_trend": {
-        "label": "SPY trend (SPY / 200d MA)",
+        "label": "SPY Trend (Price / 200d MA)",
         "unit": "ratio",
         "direction": +1,
         "source": "yfinance SPY",
@@ -292,17 +297,17 @@ INDICATOR_META = {
         "ref_line": 1.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Trend proxy: prezzo SPY vs media 200 giorni.",
-            "reference": ">1 bull trend; <1 downtrend (euristiche).",
+            "what": "Trend proxy: SPY vs its 200-day moving average.",
+            "reference": ">1 bull trend; <1 downtrend (heuristics).",
             "interpretation": (
-                "- **>1** → supporto risk-on.\n"
-                "- **<1** → risk-off."
+                "- **>1** → risk-on confirmation.\n"
+                "- **<1** → risk-off confirmation."
             ),
-            "dalio_bridge": "Trend ↓ + credit stress ↑ = fase tipica di deleveraging.",
+            "dalio_bridge": "Trend down + credit stress up often marks deleveraging phases.",
         },
     },
     "hyg_lqd_ratio": {
-        "label": "Credit risk appetite (HYG / LQD)",
+        "label": "Credit Risk Appetite (HYG / LQD)",
         "unit": "ratio",
         "direction": +1,
         "source": "yfinance HYG, LQD",
@@ -310,35 +315,33 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "HY vs IG: propensione al rischio credito.",
-            "reference": "Ratio ↑ = più appetite HY; ratio ↓ = flight to quality.",
+            "what": "HY vs IG ratio: appetite for credit risk.",
+            "reference": "Up = more HY appetite; down = flight-to-quality.",
             "interpretation": (
-                "- **↑** → risk-on.\n"
-                "- **↓** → risk-off."
+                "- **Up** → risk-on.\n"
+                "- **Down** → risk-off."
             ),
-            "dalio_bridge": "Flight-to-quality segnala vincoli di funding che si irrigidiscono.",
+            "dalio_bridge": "Flight-to-quality signals tightening funding constraints.",
         },
     },
 
-    # -------------------------
-    # BLOCCO 4 — LIQUIDITY PLUMBING
-    # -------------------------
+    # 4) PLUMBING
     "fed_balance_sheet": {
-        "label": "Fed balance sheet (WALCL)",
+        "label": "Fed Balance Sheet (WALCL)",
         "unit": "bn USD",
         "direction": +1,
-        "source": "FRED WALCL (millions USD -> bn USD)",
-        "scale": 1.0 / 1000.0,  # WALCL is in millions of USD
+        "source": "FRED WALCL (millions USD → bn USD)",
+        "scale": 1.0 / 1000.0,  # WALCL is in millions
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Totale attivi Fed: proxy liquidità sistemica.",
-            "reference": "Trend espansivo (QE) tende a supportare risk asset; QT tende a drenare.",
+            "what": "Fed assets: system liquidity proxy (QE vs QT).",
+            "reference": "Expansion tends to support risk assets; contraction tends to drain liquidity.",
             "interpretation": (
-                "- **↑** → più liquidità (tailwind).\n"
-                "- **↓** → drenaggio (headwind)."
+                "- **Up** → more liquidity (tailwind).\n"
+                "- **Down** → liquidity drain (headwind)."
             ),
-            "dalio_bridge": "Il “plumbing” determina se i flussi sostengono o drenano i risk assets.",
+            "dalio_bridge": "Plumbing determines whether flows support or drain risk assets.",
         },
     },
     "rrp": {
@@ -350,21 +353,19 @@ INDICATOR_META = {
         "ref_line": 0.0,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "RRP: liquidità parcheggiata in facility risk-free.",
-            "reference": "RRP alto = liquidità 'ferma'; in calo = liquidità rilasciata.",
+            "what": "Reverse repo usage: liquidity parked risk-free.",
+            "reference": "Higher = liquidity 'stuck'; falling = liquidity released (heuristics).",
             "interpretation": (
-                "- **RRP ↑** → meno benzina per risk asset.\n"
-                "- **RRP ↓** → potenziale supporto a risk-on."
+                "- **Up** → less fuel for risk.\n"
+                "- **Down** → potential tailwind."
             ),
-            "dalio_bridge": "RRP ↓ spesso libera marginal liquidity (supporto tattico al risk).",
+            "dalio_bridge": "RRP falling often releases marginal liquidity.",
         },
     },
 
-    # -------------------------
-    # BLOCCO 5 — DALIO CORE: DEBT & FISCAL DOMINANCE
-    # -------------------------
+    # 5) DALIO CORE — DEBT & FISCAL DOMINANCE
     "interest_payments": {
-        "label": "US Federal interest payments (quarterly)",
+        "label": "US Federal Interest Payments (Quarterly)",
         "unit": "bn USD",
         "direction": -1,
         "source": "FRED A091RC1Q027SBEA (billions, quarterly)",
@@ -372,17 +373,17 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Spesa interessi del governo federale (pagamenti interessi).",
-            "reference": "Stress ↑ quando la dinamica accelera e diventa vincolo politico.",
+            "what": "Federal interest payments: debt service pressure.",
+            "reference": "Stress rises when the trend accelerates and becomes a political constraint.",
             "interpretation": (
-                "- **↑ persistente** → aumenta probabilità di dominanza fiscale / repressione.\n"
-                "- **↓** → vincolo del debito più gestibile."
+                "- **Up persistently** → higher odds of fiscal dominance / repression.\n"
+                "- **Down** → debt constraint more manageable."
             ),
-            "dalio_bridge": "Debt service ↑ → pressione politica → incentivi a repressione finanziaria.",
+            "dalio_bridge": "Debt service up increases incentives for repression/monetization.",
         },
     },
     "federal_receipts": {
-        "label": "US Federal current receipts (quarterly)",
+        "label": "US Federal Receipts (Quarterly)",
         "unit": "bn USD",
         "direction": +1,
         "source": "FRED FGRECPT (billions, quarterly)",
@@ -390,53 +391,53 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Entrate correnti federali (receipts).",
-            "reference": "Usato per ratio interest/receipts: sostenibilità del servizio del debito.",
+            "what": "Federal current receipts: used to assess debt service sustainability.",
+            "reference": "Higher receipts help offset interest burden (heuristic).",
             "interpretation": (
-                "- **Receipts ↑** (a parità di interessi) → sostenibilità migliore.\n"
-                "- **Receipts ↓** → vincolo fiscale più stringente."
+                "- **Up** (vs interest) → sustainability improves.\n"
+                "- **Down** → fiscal constraint tightens."
             ),
-            "dalio_bridge": "Interest/receipts ↑ = il debito “pesa” e riduce margine di manovra.",
+            "dalio_bridge": "Interest/receipts rising = the debt is 'getting heavy'.",
         },
     },
     "interest_to_receipts": {
-        "label": "Debt service stress (Interest / Receipts)",
+        "label": "Debt Service Stress (Interest / Receipts)",
         "unit": "ratio",
         "direction": -1,
-        "source": "Derived: A091RC1Q027SBEA / FGRECPT",
+        "source": "Derived (A091RC1Q027SBEA / FGRECPT)",
         "scale": 1.0,
         "ref_line": None,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Proxy sostenibilità: quota di receipts “mangiata” dagli interessi.",
-            "reference": "Valori alti e in accelerazione = vincolo politico/fiscale (euristico).",
+            "what": "Sustainability proxy: share of receipts consumed by interest.",
+            "reference": "High and accelerating values = fiscal/political constraint (heuristic).",
             "interpretation": (
-                "- **↑** → aumenta probabilità di policy orientata al funding.\n"
-                "- **↓** → più spazio per policy anti-inflazione senza stress."
+                "- **Up** → higher odds policy shifts toward funding support.\n"
+                "- **Down** → more policy room."
             ),
-            "dalio_bridge": "Debt service ↑ → incentivi a tollerare inflazione / comprimere tassi reali.",
+            "dalio_bridge": "Higher debt service increases incentives to tolerate inflation / compress real rates.",
         },
     },
     "deficit_gdp": {
-        "label": "Federal surplus/deficit as % of GDP",
+        "label": "Federal Surplus/Deficit (% of GDP)",
         "unit": "%",
         "direction": -1,
-        "source": "FRED FYFSGDA188S (% GDP, annual)",
+        "source": "FRED FYFSGDA188S (annual)",
         "scale": 1.0,
         "ref_line": -3.0,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Saldo federale (% PIL). Valori negativi = deficit.",
-            "reference": "Deficit persistente = supply Treasury persistente (euristico).",
+            "what": "Federal balance as % of GDP (negative = deficit).",
+            "reference": "Persistent deficits = persistent Treasury supply (heuristic).",
             "interpretation": (
-                "- **Deficit ↑ in valore assoluto (più negativo)** → pressione su term premium e funding.\n"
-                "- **Miglioramento** → riduce pressione strutturale."
+                "- **More negative** → upward pressure on term premium/funding.\n"
+                "- **Improving** → reduces structural pressure."
             ),
-            "dalio_bridge": "Deficit ↑ → supply Treasury ↑ → term premium ↑ → duration perde.",
+            "dalio_bridge": "Deficit up → supply up → term premium up → long duration suffers.",
         },
     },
     "term_premium_10y": {
-        "label": "US 10Y term premium (ACM)",
+        "label": "US 10Y Term Premium (ACM)",
         "unit": "%",
         "direction": -1,
         "source": "FRED ACMTP10",
@@ -444,43 +445,39 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Premio a termine: compenso richiesto dal mercato per detenere duration nominale.",
-            "reference": "Term premium ↑ = duration nominale più “tossica” (euristico).",
+            "what": "Term premium: compensation demanded to hold nominal duration.",
+            "reference": "Term premium up = long nominal duration less reliable (heuristic).",
             "interpretation": (
-                "- **↑** → rischio su bond lunghi nominali.\n"
-                "- **↓** → duration torna hedge più affidabile."
+                "- **Up** → higher risk in long nominal bonds.\n"
+                "- **Down** → duration becomes a better hedge again."
             ),
-            "dalio_bridge": "Se term premium sale per supply/funding, la duration smette di proteggere.",
+            "dalio_bridge": "When term premium rises on supply/funding, duration can stop hedging.",
         },
     },
 
-    # -------------------------
-    # BLOCCO 6 — EXTERNAL BALANCE
-    # -------------------------
+    # 6) EXTERNAL BALANCE
     "current_account_gdp": {
-        "label": "US Current account balance (% of GDP)",
+        "label": "US Current Account Balance (% of GDP)",
         "unit": "%",
         "direction": +1,
-        "source": "FRED USAB6BLTT02STSAQ (% GDP, quarterly)",
+        "source": "FRED USAB6BLTT02STSAQ (quarterly)",
         "scale": 1.0,
         "ref_line": 0.0,
         "scoring_mode": "pct20y",
         "expander": {
-            "what": "Saldo conto corrente USA (% PIL). Valori negativi = dipendenza da capitali esteri.",
-            "reference": "Deficit persistente = vulnerabilità quando USD funding si stringe (euristico).",
+            "what": "Current account balance: negative = reliance on foreign capital.",
+            "reference": "Persistent deficit = vulnerability when USD funding tightens (heuristic).",
             "interpretation": (
-                "- **Più negativo** → dipendenza estera ↑.\n"
-                "- **Verso 0 / positivo** → vincolo esterno ↓."
+                "- **More negative** → external reliance up.\n"
+                "- **Toward 0 / positive** → constraint eases."
             ),
-            "dalio_bridge": "Current account deficit = dipendenza da capitali esteri → vulnerabilità in tightening globale.",
+            "dalio_bridge": "External deficits amplify vulnerability during global tightening.",
         },
     },
 
-    # -------------------------
-    # CROSS-ASSET CONFIRMATION
-    # -------------------------
+    # CROSS CONFIRMATION (non-weighted)
     "world_equity": {
-        "label": "Global equities (URTH)",
+        "label": "Global Equities (URTH)",
         "unit": "",
         "direction": +1,
         "source": "yfinance URTH",
@@ -488,17 +485,17 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Equity globale: conferma regime non solo US.",
-            "reference": "Trend e drawdown come conferma/smentita.",
+            "what": "Global equity proxy: confirms regime beyond the US.",
+            "reference": "Trend/drawdown as confirmation or contradiction.",
             "interpretation": (
-                "- **Trend ↑** → conferma risk-on.\n"
-                "- **Trend ↓** → conferma risk-off."
+                "- **Trend up** → risk-on confirmation.\n"
+                "- **Trend down** → risk-off confirmation."
             ),
-            "dalio_bridge": "Conferma cross-asset: se il mondo rompe, il rischio è più strutturale.",
+            "dalio_bridge": "If global equities roll over, the risk is more structural than local.",
         },
     },
     "duration_proxy_tlt": {
-        "label": "Long duration (TLT)",
+        "label": "Long Duration (TLT)",
         "unit": "",
         "direction": -1,
         "source": "yfinance TLT",
@@ -506,13 +503,13 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Treasury lunga duration (hedge tipico in risk-off).",
-            "reference": "Rally TLT spesso coincide con flight-to-quality.",
+            "what": "Long-duration Treasuries proxy (classic risk-off hedge).",
+            "reference": "Rallies often coincide with flight-to-quality.",
             "interpretation": (
-                "- **TLT ↑** → spesso risk-off / easing expectations.\n"
-                "- **TLT ↓** con yields ↑ → headwind per duration."
+                "- **TLT up** → often risk-off / easing expectations.\n"
+                "- **TLT down** with yields up → duration headwind."
             ),
-            "dalio_bridge": "TLT che non protegge in stress spesso segnala inflationary deleveraging / term premium ↑.",
+            "dalio_bridge": "If TLT fails to hedge during stress, inflationary deleveraging / term premium risk may be rising.",
         },
     },
     "gold": {
@@ -524,67 +521,66 @@ INDICATOR_META = {
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
-            "what": "Oro: hedge (inflazione/shock/sistemico).",
-            "reference": "Breakout spesso segnala domanda di hedging.",
+            "what": "Gold: hedge against inflation/shocks/systemic risk.",
+            "reference": "Breakouts often signal hedging demand.",
             "interpretation": (
-                "- **Gold ↑** → domanda di hedge.\n"
-                "- **Gold ↓** in bull equity → risk-on pulito."
+                "- **Gold up** → hedging demand.\n"
+                "- **Gold down** in equity bull → cleaner risk-on."
             ),
-            "dalio_bridge": "Oro tende a funzionare come hedge quando policy vira a repressione / inflazione tollerata.",
+            "dalio_bridge": "Gold often works when policy shifts toward repression / tolerated inflation.",
         },
     },
 }
 
-# 6 blocchi core + 1 tab extra di conferma (non pesa nel global)
 BLOCKS = {
     "price_of_time": {
-        "name": "1) Price of time (Monetary stance)",
+        "name": "1) Price of Time (Monetary Stance)",
         "weight": 0.20,
         "indicators": ["real_10y", "nominal_10y", "yield_curve_10_2"],
         "layout_rows": [["real_10y", "nominal_10y"], ["yield_curve_10_2"]],
-        "desc": "Costo reale del capitale e sensibilità degli asset alla duration.",
+        "desc": "Cost of capital and duration sensitivity.",
     },
     "macro": {
-        "name": "2) Macro cycle (Inflation / Growth)",
+        "name": "2) Macro Cycle (Inflation / Growth)",
         "weight": 0.15,
         "indicators": ["breakeven_10y", "cpi_yoy", "unemployment_rate"],
         "layout_rows": [["breakeven_10y", "cpi_yoy"], ["unemployment_rate"]],
-        "desc": "Vincolo di policy: inflazione sticky vs rallentamento crescita.",
+        "desc": "Policy constraint: sticky inflation vs growth slowdown.",
     },
     "conditions": {
-        "name": "3) Financial conditions & stress (USD + credit + vol + trend)",
+        "name": "3) Financial Conditions & Stress (USD + Credit + Vol + Trend)",
         "weight": 0.20,
         "indicators": ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"],
         "layout_rows": [["usd_index", "hy_oas"], ["vix", "spy_trend"], ["hyg_lqd_ratio"]],
-        "desc": "Tightening globale: dollaro, credito, volatilità e trend (termometro di risk-on/off).",
+        "desc": "Global tightening: dollar, spreads, volatility, and trend (risk-on/off thermometer).",
     },
     "plumbing": {
-        "name": "4) System liquidity (plumbing)",
+        "name": "4) System Liquidity (Plumbing)",
         "weight": 0.15,
         "indicators": ["fed_balance_sheet", "rrp"],
         "layout_rows": [["fed_balance_sheet", "rrp"]],
-        "desc": "Liquidità sistemica: supporto vs drenaggio per i risk assets.",
+        "desc": "System liquidity: support vs drain for risk assets.",
     },
     "debt_fiscal": {
-        "name": "5) Dalio core — Debt sustainability & fiscal dominance",
+        "name": "5) Dalio Core — Debt Sustainability & Fiscal Dominance",
         "weight": 0.20,
         "indicators": ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"],
         "layout_rows": [["interest_to_receipts", "deficit_gdp"], ["term_premium_10y"], ["interest_payments", "federal_receipts"]],
-        "desc": "Quando il problema non è più il ciclo ma il bilancio sovrano e i vincoli di funding.",
+        "desc": "When the constraint is the sovereign balance sheet and funding conditions.",
     },
     "external": {
-        "name": "6) External balance — Who funds who",
+        "name": "6) External Balance — Who Funds Who",
         "weight": 0.10,
         "indicators": ["current_account_gdp"],
         "layout_rows": [["current_account_gdp"]],
-        "desc": "Vincolo esterno: dipendenza da capitali esteri e vulnerabilità in USD tightening.",
+        "desc": "External constraint: reliance on foreign capital under USD tightening.",
     },
     "cross": {
-        "name": "Cross-asset confirmation (non-weighted)",
+        "name": "Cross-Asset Confirmation (Non-Weighted)",
         "weight": 0.00,
         "indicators": ["world_equity", "duration_proxy_tlt", "gold"],
         "layout_rows": [["world_equity", "duration_proxy_tlt"], ["gold"]],
-        "desc": "Conferme cross-asset (utile per coerenza del regime; non pesa nel global score).",
+        "desc": "Cross-asset confirmation (does not affect global score).",
     },
 }
 
@@ -626,15 +622,14 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
                 vals.append(float(o["value"]))
             except Exception:
                 vals.append(np.nan)
-        s = pd.Series(vals, index=idx).astype(float).sort_index()
-        return s
+        return pd.Series(vals, index=idx).astype(float).sort_index()
     except Exception:
         return pd.Series(dtype=float)
 
 
 @st.cache_data(ttl=3600)
 def fetch_yf_one(ticker: str, start_date: str) -> pd.Series:
-    """Fetch robusto per singolo ticker (evita problemi multi-ticker / multiindex)."""
+    """Robust single-ticker fetch (avoids multi-ticker MultiIndex issues)."""
     try:
         df = yf.Ticker(ticker).history(start=start_date, auto_adjust=True)
         if df is None or df.empty:
@@ -651,10 +646,7 @@ def fetch_yf_one(ticker: str, start_date: str) -> pd.Series:
 
 @st.cache_data(ttl=3600)
 def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
-    out = {}
-    for t in tickers:
-        out[t] = fetch_yf_one(t, start_date)
-    return out
+    return {t: fetch_yf_one(t, start_date) for t in tickers}
 
 
 # =========================
@@ -662,10 +654,7 @@ def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
 # =========================
 
 def infer_frequency(series: pd.Series) -> str:
-    """
-    Rough frequency classification based on median spacing in days.
-    Returns one of: 'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'unknown'
-    """
+    """Classify frequency by median index spacing."""
     if series is None:
         return "unknown"
     s = series.dropna()
@@ -722,16 +711,6 @@ def pct_change_by_periods(series: pd.Series, periods_back: int) -> float:
 
 
 def compute_deltas(series: pd.Series) -> dict:
-    """
-    Returns:
-      {
-        "label_a": "Δ7d", "val_a": float or nan,
-        "label_b": "Δ30d", "val_b": float or nan,
-        "label_c": "Δ1Y", "val_c": float or nan,
-        "freq": "daily|weekly|monthly|quarterly|annual|unknown"
-      }
-    For slower series, uses period-based deltas (1Q/4Q, 1Y/5Y) instead of days-based.
-    """
     freq = infer_frequency(series)
 
     if freq in ("daily", "weekly", "unknown"):
@@ -744,7 +723,6 @@ def compute_deltas(series: pd.Series) -> dict:
             "label_c": "Δ1Y",
             "val_c": pct_change_by_days(series, 365),
         }
-
     if freq == "monthly":
         return {
             "freq": freq,
@@ -755,7 +733,6 @@ def compute_deltas(series: pd.Series) -> dict:
             "label_c": "Δ12M",
             "val_c": pct_change_by_periods(series, 12),
         }
-
     if freq == "quarterly":
         return {
             "freq": freq,
@@ -766,7 +743,6 @@ def compute_deltas(series: pd.Series) -> dict:
             "label_c": "Δ8Q",
             "val_c": pct_change_by_periods(series, 8),
         }
-
     if freq == "annual":
         return {
             "freq": freq,
@@ -777,7 +753,6 @@ def compute_deltas(series: pd.Series) -> dict:
             "label_c": "Δ5Y",
             "val_c": pct_change_by_periods(series, 5),
         }
-
     return {
         "freq": freq,
         "label_a": "Δ7d",
@@ -796,11 +771,10 @@ def fmt_delta(val: float) -> str:
 
 
 # =========================
-# SCORING (z5y vs pct20y)
+# SCORING
 # =========================
 
 def rolling_percentile_last(hist: pd.Series, latest: float) -> float:
-    """Percentile rank of latest within hist (0..1)."""
     h = hist.dropna()
     if len(h) < 8 or pd.isna(latest):
         return np.nan
@@ -808,10 +782,6 @@ def rolling_percentile_last(hist: pd.Series, latest: float) -> float:
 
 
 def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str = "z5y"):
-    """
-    Returns: (score_0_100, signal, latest)
-    signal = z-score (for z5y) or percentile-mapped signal in [-2,+2] (for pct20y)
-    """
     if series is None or series.empty:
         return np.nan, np.nan, np.nan
     s = series.dropna()
@@ -822,18 +792,15 @@ def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str
     end = s.index.max()
 
     if scoring_mode == "pct20y":
-        # allow fewer observations; structural series can be quarterly/annual
         start = end - DateOffset(years=20)
         hist = s[s.index >= start]
         if len(hist) < 8:
-            # if we don't have enough for a meaningful percentile, return n/a
             return np.nan, np.nan, latest
-        p = rolling_percentile_last(hist, latest)  # 0..1
+        p = rolling_percentile_last(hist, latest)
         if np.isnan(p):
             return np.nan, np.nan, latest
         sig = (p - 0.5) * 4.0  # 0->-2, 0.5->0, 1->+2
     else:
-        # z5y: needs enough observations to be stable
         if len(s) < 20:
             return np.nan, np.nan, latest
         start = end - DateOffset(years=5)
@@ -866,7 +833,7 @@ def status_pill_html(status: str) -> str:
     if status == "risk_off":
         return "<span class='pill bad'>🔴 Risk-off</span>"
     if status == "neutral":
-        return "<span class='pill warn'>🟡 Neutrale</span>"
+        return "<span class='pill warn'>🟡 Neutral</span>"
     return "<span class='pill'>⚪️ n/a</span>"
 
 
@@ -889,7 +856,131 @@ def fmt_value(val, unit: str, scale: float = 1.0):
 
 
 # =========================
-# PLOTTING (PREMIUM)
+# DYNAMIC "SO-WHAT" TITLES (RULE-BASED, NO LLM)
+# =========================
+
+def _trend_word(delta: float) -> str:
+    if np.isnan(delta):
+        return "flat"
+    if delta >= 1.0:
+        return "rising"
+    if delta <= -1.0:
+        return "falling"
+    return "stable"
+
+
+def _band_from_signal(sig: float) -> str:
+    if np.isnan(sig):
+        return "unknown"
+    if sig >= 1.0:
+        return "high"
+    if sig <= -1.0:
+        return "low"
+    return "normal"
+
+
+def so_what_title(
+    key: str,
+    series: pd.Series,
+    indicator_scores: dict,
+    years_back: int,
+    meta: dict
+) -> str:
+    """
+    Produces a short, sharp, interpretation-oriented title based on:
+    - recent delta (freq-aware)
+    - above/below ref line (if any)
+    - signal band (z/percentile mapped)
+    - risk regime status
+    """
+    info = indicator_scores.get(key, {})
+    status = info.get("status", "n/a")
+    sig = info.get("signal", np.nan)
+    latest = info.get("latest", np.nan)
+
+    deltas = compute_deltas(series)
+    d_mid_label = deltas["label_b"]
+    d_mid = deltas["val_b"]
+    trend = _trend_word(d_mid)
+    band = _band_from_signal(sig)
+    ref = meta.get("ref_line", None)
+
+    # reference context
+    ref_ctx = ""
+    if ref is not None and (latest is not None) and not (isinstance(latest, float) and np.isnan(latest)):
+        try:
+            above = float(latest) > float(ref)
+            ref_ctx = f"{'above' if above else 'below'} ref"
+        except Exception:
+            ref_ctx = ""
+
+    # map to "so-what" per indicator family (simple templates)
+    so = "watch"
+    if key in ("real_10y", "nominal_10y"):
+        if trend == "rising":
+            so = "tightening headwind"
+        elif trend == "falling":
+            so = "easing tailwind"
+        else:
+            so = "rate pressure stable"
+        if key == "real_10y" and ref is not None:
+            so = so + (" (real yields >0 matter)" if ref_ctx.startswith("above") else " (real yields <0 supportive)")
+    elif key == "yield_curve_10_2":
+        so = "cycle stress if inverted" if (ref_ctx.startswith("below") or band == "low") else "cycle normalizing"
+    elif key in ("breakeven_10y", "cpi_yoy"):
+        if trend == "rising":
+            so = "inflation constraint risk"
+        elif trend == "falling":
+            so = "disinflation supportive"
+        else:
+            so = "inflation steady"
+    elif key in ("usd_index",):
+        so = "global tightening" if trend == "rising" else ("conditions easing" if trend == "falling" else "USD steady")
+    elif key in ("hy_oas",):
+        so = "credit stress building" if trend == "rising" else ("credit easing" if trend == "falling" else "credit stable")
+    elif key in ("vix",):
+        so = "risk premia up" if trend == "rising" else ("vol calming" if trend == "falling" else "vol stable")
+    elif key in ("spy_trend",):
+        so = "risk-on confirmation" if (ref_ctx.startswith("above") or band == "high") else "risk-off warning"
+    elif key in ("hyg_lqd_ratio",):
+        so = "risk appetite improving" if trend == "rising" else ("flight-to-quality" if trend == "falling" else "appetite steady")
+    elif key in ("fed_balance_sheet",):
+        so = "liquidity tailwind" if trend == "rising" else ("liquidity drain" if trend == "falling" else "liquidity stable")
+    elif key in ("rrp",):
+        so = "liquidity parked" if trend == "rising" else ("liquidity released" if trend == "falling" else "RRP stable")
+    elif key in ("interest_to_receipts", "interest_payments", "deficit_gdp", "term_premium_10y", "current_account_gdp"):
+        if key == "term_premium_10y":
+            so = "long duration less reliable" if trend == "rising" else ("duration hedge improves" if trend == "falling" else "term premium steady")
+        elif key == "interest_to_receipts":
+            so = "fiscal constraint rising" if trend == "rising" else ("constraint easing" if trend == "falling" else "constraint stable")
+        elif key == "deficit_gdp":
+            so = "supply pressure risk" if trend == "falling" else "deficit pressure"  # note: deficit series is negative; trend wording is still helpful
+        elif key == "current_account_gdp":
+            so = "external reliance risk" if trend == "falling" else ("constraint easing" if trend == "rising" else "external steady")
+        else:
+            so = "debt stress risk" if trend == "rising" else ("stress easing" if trend == "falling" else "stress stable")
+    else:
+        so = "monitor"
+
+    # status tag
+    status_tag = "Risk-on" if status == "risk_on" else ("Risk-off" if status == "risk_off" else ("Neutral" if status == "neutral" else "n/a"))
+
+    # keep it compact, top-left
+    # Example: "Real yields rising (Δ30d +X%) above ref → tightening headwind | Risk-off | 15Y"
+    delta_txt = fmt_delta(d_mid)
+    horizon_txt = f"{years_back}Y view"
+    ctx_bits = []
+    if trend != "flat":
+        ctx_bits.append(f"{trend} ({d_mid_label} {delta_txt})")
+    if ref_ctx:
+        ctx_bits.append(ref_ctx)
+    ctx = ", ".join(ctx_bits) if ctx_bits else f"{d_mid_label} {delta_txt}"
+
+    return f"{so} — {ctx} | {status_tag} | {horizon_txt}"
+
+
+# =========================
+# PLOTTING (PREMIUM + TITLE TOP-LEFT)
 # =========================
 
 def plot_premium(series: pd.Series, title: str, ref_line=None):
@@ -901,7 +992,7 @@ def plot_premium(series: pd.Series, title: str, ref_line=None):
             y=s.values,
             mode="lines",
             line=dict(width=2),
-            name=title,
+            name="",
         )
     )
 
@@ -910,31 +1001,53 @@ def plot_premium(series: pd.Series, title: str, ref_line=None):
             y=float(ref_line),
             line_width=1,
             line_dash="dot",
-            opacity=0.7,
+            opacity=0.70,
         )
 
+    # Stronger axis lines for separation
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.07)",
+        zeroline=False,
+        showline=True,
+        linecolor="rgba(255,255,255,0.12)",
+        linewidth=1,
+        ticks="outside",
+        tickcolor="rgba(255,255,255,0.10)",
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.07)",
+        zeroline=False,
+        showline=True,
+        linecolor="rgba(255,255,255,0.12)",
+        linewidth=1,
+        ticks="outside",
+        tickcolor="rgba(255,255,255,0.10)",
+    )
+
     fig.update_layout(
-        height=290,
-        margin=dict(l=10, r=10, t=20, b=10),
+        height=295,
+        margin=dict(l=10, r=10, t=48, b=8),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.02)",
-        xaxis=dict(
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.06)",
-            zeroline=False,
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.06)",
-            zeroline=False,
-        ),
         showlegend=False,
-        font=dict(color="rgba(255,255,255,0.85)"),
+        font=dict(color="rgba(255,255,255,0.86)"),
+        title=dict(
+            text=title,
+            x=0.01, xanchor="left",
+            y=0.98, yanchor="top",
+            font=dict(size=13),
+        )
     )
     return fig
 
 
-def render_tile(key: str, series: pd.Series, indicator_scores: dict):
+# =========================
+# TILES
+# =========================
+
+def render_tile(key: str, series: pd.Series, indicator_scores: dict, years_back: int):
     meta = INDICATOR_META[key]
     s_info = indicator_scores.get(key, {})
     score = s_info.get("score", np.nan)
@@ -953,10 +1066,10 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
         <div class='tile-toprow'>
           <div>
             <div class='tile-title'>{meta["label"]}</div>
-            <div class='tile-meta'>Fonte: {meta["source"]}</div>
+            <div class='tile-meta'>Source: {meta["source"]}</div>
           </div>
           <div style='text-align:right'>
-            <div>{mode_badge}<span class='pill'>Ultimo: {latest_txt}</span>{status_pill_html(status)}</div>
+            <div>{mode_badge}<span class='pill'>Latest: {latest_txt}</span>{status_pill_html(status)}</div>
             <div class='tiny'>Score: {score_txt} · {deltas["label_b"]}: {fmt_delta(deltas["val_b"])}</div>
           </div>
         </div>
@@ -964,32 +1077,38 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
         unsafe_allow_html=True
     )
 
-    with st.expander("Definizione & guida alla lettura", expanded=False):
+    with st.expander("Definition & how to read", expanded=False):
         exp = meta["expander"]
-        st.markdown(f"**Che metrica è**: {exp['what']}")
-        st.markdown(f"**Valori di riferimento**: {exp['reference']}")
-        st.markdown("**Interpretazione bidirezionale**:")
+        st.markdown(f"**What it is:** {exp['what']}")
+        st.markdown(f"**Reference levels:** {exp['reference']}")
+        st.markdown("**Two-way interpretation:**")
         st.markdown(exp["interpretation"])
-        st.markdown(f"**Ponte (Dalio)**: {exp.get('dalio_bridge','')}")
+        st.markdown(f"**Dalio bridge:** {exp.get('dalio_bridge','')}")
         st.markdown(
-            f"**What changed**: "
+            f"**What changed:** "
             f"{deltas['label_a']} {fmt_delta(deltas['val_a'])}, "
             f"{deltas['label_b']} {fmt_delta(deltas['val_b'])}, "
             f"{deltas['label_c']} {fmt_delta(deltas['val_c'])}"
         )
 
-    fig = plot_premium(series, meta["label"], ref_line=meta.get("ref_line", None))
+    chart_title = so_what_title(key, series, indicator_scores, years_back, meta)
+    fig = plot_premium(series, chart_title, ref_line=meta.get("ref_line", None))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================
-# DALIO OPERATING LINES (ETF-BASED)
+# OPERATING LINES (ETF-BASED)
 # =========================
 
 def latest_value(indicator_scores: dict, key: str) -> float:
     v = indicator_scores.get(key, {}).get("latest", np.nan)
-    return np.nan if v is None else float(v) if not (isinstance(v, float) and np.isnan(v)) else np.nan
+    if v is None:
+        return np.nan
+    try:
+        return float(v)
+    except Exception:
+        return np.nan
 
 
 def operating_lines(block_scores: dict, indicator_scores: dict):
@@ -999,69 +1118,65 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     - Duration stance
     - Credit stance
     - Hedges
-    NOTE: uses a mix of block scores (regime) + SELECTED latest values (levels), to avoid score/level confusion.
+    Uses: block scores (regime) + selected latest levels (CPI/breakeven) to avoid score≠level confusion.
     """
     gs = block_scores.get("GLOBAL", {}).get("score", np.nan)
 
     def _sg(x):
-        if np.isnan(x): return 0.0
+        if np.isnan(x):
+            return 0.0
         return float(x)
 
-    # Equity budget: mostly global + conditions
     cond = _sg(block_scores.get("conditions", {}).get("score", np.nan))
 
     if not np.isnan(gs):
         if gs >= 60 and cond >= 55:
-            equity = "↑ (increase) — beta ok, ma controlla credito"
+            equity = "↑ Increase — beta OK; keep an eye on credit"
         elif gs <= 40 or cond <= 40:
-            equity = "↓ (reduce) — priorità difesa / qualità"
+            equity = "↓ Reduce — prioritize defense / quality"
         else:
-            equity = "→ (neutral) — sizing moderato"
+            equity = "→ Neutral — moderate sizing"
     else:
         equity = "n/a"
 
-    # Duration stance: combine regime (price_of_time) + LEVELS (CPI, term premium)
+    # Duration stance: combine regime + inflation levels + term premium regime
     pot = _sg(block_scores.get("price_of_time", {}).get("score", np.nan))
     termp_score = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
+    cpi_latest = latest_value(indicator_scores, "cpi_yoy")  # LEVEL
+    breakeven_latest = latest_value(indicator_scores, "breakeven_10y")  # LEVEL
 
-    cpi_latest = latest_value(indicator_scores, "cpi_yoy")          # LEVEL in %
-    breakeven_latest = latest_value(indicator_scores, "breakeven_10y")  # LEVEL in %
-
-    # Heuristic logic (level-aware):
-    # - if term premium stress + inflation elevated -> avoid long nominal, prefer short/TIPS
-    # - if disinflation and price_of_time improving and term premium benign -> long duration can hedge
     inflation_elevated = (not np.isnan(cpi_latest) and cpi_latest >= 3.0) or (not np.isnan(breakeven_latest) and breakeven_latest >= 2.7)
     inflation_benign = (not np.isnan(cpi_latest) and cpi_latest <= 2.6) and (np.isnan(breakeven_latest) or breakeven_latest <= 2.6)
 
     if termp_score <= 40 and inflation_elevated:
-        duration = "short/neutral — evita long nominal; preferisci qualità / TIPS"
+        duration = "Short/Neutral — avoid long nominals; prefer quality / TIPS"
     elif pot >= 55 and inflation_benign and termp_score >= 55:
-        duration = "long (hedge) — disinflation + duration torna difensiva"
+        duration = "Long (hedge) — disinflation + duration hedge improves"
     else:
-        duration = "neutral — bilancia rischio term premium vs ciclo"
+        duration = "Neutral — balance term-premium risk vs cycle"
 
-    # Credit stance: HY OAS + HYG/LQD + debt stress
+    # Credit stance
     hy = _sg(indicator_scores.get("hy_oas", {}).get("score", np.nan))
     hyg = _sg(indicator_scores.get("hyg_lqd_ratio", {}).get("score", np.nan))
     ds = _sg(indicator_scores.get("interest_to_receipts", {}).get("score", np.nan))
 
     if hy <= 40 or hyg <= 40 or ds <= 40:
-        credit = "IG > HY — riduci rischio default / funding"
+        credit = "IG > HY — reduce default/funding risk"
     elif hy >= 60 and hyg >= 60 and ds >= 50:
-        credit = "opportunistic HY — con sizing e stop"
+        credit = "Opportunistic HY — with sizing discipline"
     else:
-        credit = "neutral — qualità con selettività"
+        credit = "Neutral — quality tilt with selectivity"
 
-    # Hedges: USD vs Gold vs Cash-like (policy/fiscal) — mix regime + inflation level
+    # Hedges
     usd = _sg(indicator_scores.get("usd_index", {}).get("score", np.nan))
     dalio = _sg(block_scores.get("debt_fiscal", {}).get("score", np.nan))
 
     if dalio <= 40 and inflation_elevated:
-        hedges = "Gold / real-asset tilt — rischio repressione / inflazione tollerata"
+        hedges = "Gold / real-asset tilt — repression / tolerated inflation risk"
     elif usd <= 40 and cond <= 45:
-        hedges = "USD / cash-like — funding stress"
+        hedges = "USD / cash-like — funding stress hedge"
     else:
-        hedges = "mix leggero (cash-like + gold tattico)"
+        hedges = "Light mix (cash-like + tactical gold)"
 
     return equity, duration, credit, hedges
 
@@ -1071,29 +1186,29 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
 # =========================
 
 def main():
-    st.title("Global finance | Macro overview (Dalio-enhanced)")
+    st.title("Global Finance | Macro Overview (Dalio-Enhanced)")
     st.markdown(
-        "<div class='muted'>Dashboard macro-finance: mantiene i “thermometers” di mercato ma aggiunge un layer Dalio su sostenibilità del debito, dominanza fiscale e vincolo esterno.</div>",
+        "<div class='muted'>Macro-finance dashboard: market thermometers + a Dalio layer on debt sustainability, fiscal dominance, and the external constraint.</div>",
         unsafe_allow_html=True
     )
 
-    # Sidebar controls
-    st.sidebar.header("Impostazioni")
+    # Sidebar
+    st.sidebar.header("Settings")
     if st.sidebar.button("🔄 Refresh data (clear cache)"):
         st.cache_data.clear()
         st.rerun()
 
-    years_back = st.sidebar.slider("Orizzonte storico (anni)", 5, 30, 15)
+    years_back = st.sidebar.slider("Historical window (years)", 5, 30, 15)
     today = datetime.now(timezone.utc).date()
     start_date = (today - DateOffset(years=years_back)).date().isoformat()
-    st.sidebar.markdown(f"**Data start:** {start_date}")
+    st.sidebar.markdown(f"**Start date:** {start_date}")
 
     fred_key = get_fred_api_key()
     if fred_key is None:
-        st.sidebar.error("⚠️ Manca `FRED_API_KEY` nei secrets.")
+        st.sidebar.error("⚠️ Missing `FRED_API_KEY` in Streamlit secrets.")
 
     # Fetch data
-    with st.spinner("Caricamento dati (FRED + yfinance)..."):
+    with st.spinner("Loading data (FRED + yfinance)..."):
         fred = {
             # Price of time
             "real_10y": fetch_fred_series("DFII10", start_date),
@@ -1125,7 +1240,7 @@ def main():
 
         indicators = {}
 
-        # Derived: yield curve
+        # Yield curve derived
         if not fred["nominal_10y"].empty and not fred["dgs2"].empty:
             yc = fred["nominal_10y"].to_frame("10y").join(fred["dgs2"].to_frame("2y"), how="inner")
             indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
@@ -1138,7 +1253,7 @@ def main():
         else:
             indicators["cpi_yoy"] = pd.Series(dtype=float)
 
-        # Direct FRED indicators (core)
+        # Direct FRED indicators
         indicators["real_10y"] = fred["real_10y"]
         indicators["nominal_10y"] = fred["nominal_10y"]
         indicators["breakeven_10y"] = fred["breakeven_10y"]
@@ -1154,7 +1269,7 @@ def main():
         indicators["term_premium_10y"] = fred["term_premium_10y"]
         indicators["current_account_gdp"] = fred["current_account_gdp"]
 
-        # Derived: interest / receipts ratio
+        # Derived ratio: interest / receipts
         ip = indicators.get("interest_payments", pd.Series(dtype=float))
         fr = indicators.get("federal_receipts", pd.Series(dtype=float))
         if ip is not None and fr is not None and (not ip.empty) and (not fr.empty):
@@ -1164,13 +1279,12 @@ def main():
         else:
             indicators["interest_to_receipts"] = pd.Series(dtype=float)
 
-        # --- YFINANCE (robust per-ticker)
+        # yfinance
         yf_map = fetch_yf_many(
             ["DX-Y.NYB", "^VIX", "SPY", "HYG", "LQD", "URTH", "TLT", "GLD"],
             start_date
         )
 
-        # USD index: try DXY from yfinance, else fallback to FRED DTWEXBGS
         dxy = yf_map.get("DX-Y.NYB", pd.Series(dtype=float))
         if dxy is None or dxy.empty:
             dxy = fred["usd_fred"]
@@ -1186,7 +1300,7 @@ def main():
         else:
             indicators["spy_trend"] = pd.Series(dtype=float)
 
-        # HYG / LQD
+        # HYG/LQD ratio
         hyg = yf_map.get("HYG", pd.Series(dtype=float))
         lqd = yf_map.get("LQD", pd.Series(dtype=float))
         if hyg is not None and lqd is not None and (not hyg.empty) and (not lqd.empty):
@@ -1200,7 +1314,7 @@ def main():
         indicators["duration_proxy_tlt"] = yf_map.get("TLT", pd.Series(dtype=float))
         indicators["gold"] = yf_map.get("GLD", pd.Series(dtype=float))
 
-    # Score indicators (mode-aware)
+    # Score indicators
     indicator_scores = {}
     for key, meta in INDICATOR_META.items():
         series = indicators.get(key, pd.Series(dtype=float))
@@ -1214,10 +1328,11 @@ def main():
             "mode": mode
         }
 
-    # Score blocks + global (6 blocchi core)
+    # Score blocks + global
     block_scores = {}
     global_score = 0.0
     w_used = 0.0
+
     for bkey, binfo in BLOCKS.items():
         if bkey == "cross":
             vals = []
@@ -1249,7 +1364,7 @@ def main():
 
     # Data freshness
     latest_points = []
-    for _, s in indicators.items():
+    for s in indicators.values():
         if s is not None and not s.empty:
             latest_points.append(s.index.max())
     data_max_date = max(latest_points) if latest_points else None
@@ -1257,14 +1372,14 @@ def main():
     # Tabs
     tabs = st.tabs([
         "Overview",
-        "1) Price of time",
-        "2) Macro cycle",
-        "3) Conditions & stress",
-        "4) Liquidity plumbing",
+        "1) Price of Time",
+        "2) Macro Cycle",
+        "3) Conditions & Stress",
+        "4) Liquidity (Plumbing)",
         "5) Debt & Fiscal (Dalio)",
-        "6) External balance",
-        "Cross confirmation",
-        "What changed",
+        "6) External Balance",
+        "Cross Confirmation",
+        "What Changed",
         "Report",
     ])
 
@@ -1275,7 +1390,22 @@ def main():
         left, right = st.columns([2, 1])
 
         with left:
-            st.markdown("### Executive snapshot (con layer Dalio)")
+            # Risk-on/off legend (explicit, up front)
+            st.markdown(
+                """
+                <div class="section-card">
+                  <div class="tiny">
+                    <b>Risk-on / Neutral / Risk-off meaning (for ETF investors):</b><br/>
+                    🟢 <b>Risk-on</b>: conditions/liquidity support risk assets → higher equity budget, more credit tolerance, duration depends on inflation/term premium.<br/>
+                    🟡 <b>Neutral</b>: mixed signals → moderate sizing, quality tilt, balanced hedges.<br/>
+                    🔴 <b>Risk-off</b>: stress/tightening dominates → lower equity beta, prefer IG/quality, increase hedges; be cautious with HY and long nominal duration when term premium/inflation are high.
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            st.markdown("### Executive Snapshot (with Dalio layer)")
             gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
@@ -1296,7 +1426,7 @@ def main():
                 f"""
                 <div class="kpi-grid">
                   <div class="kpi-card">
-                    <div class="kpi-title">Global score (0–100) — 6 blocchi core</div>
+                    <div class="kpi-title">Global Score (0–100) — 6 core blocks</div>
                     <div class="kpi-value">{gs_txt}</div>
                     <div class="kpi-sub">{status_pill_html(global_status)}</div>
                     <div class="kpi-sub">
@@ -1308,25 +1438,25 @@ def main():
                   </div>
 
                   <div class="kpi-card">
-                    <div class="kpi-title">Blocchi (score)</div>
+                    <div class="kpi-title">Blocks (score)</div>
                     <div class="kpi-sub">
-                      {p1_s} Price of time: <b>{p1_v}</b><br/>
-                      {p2_s} Macro: <b>{p2_v}</b><br/>
-                      {p3_s} Conditions: <b>{p3_v}</b><br/>
+                      {p1_s} Price of Time: <b>{p1_v}</b><br/>
+                      {p2_s} Macro Cycle: <b>{p2_v}</b><br/>
+                      {p3_s} Conditions & Stress: <b>{p3_v}</b><br/>
                       {p4_s} Plumbing: <b>{p4_v}</b><br/>
                       {p5_s} Debt & Fiscal: <b>{p5_v}</b><br/>
-                      {p6_s} External balance: <b>{p6_v}</b>
+                      {p6_s} External Balance: <b>{p6_v}</b>
                     </div>
                   </div>
 
                   <div class="kpi-card">
-                    <div class="kpi-title">Dalio “bridges” (1-liners)</div>
+                    <div class="kpi-title">Dalio bridges (one-liners)</div>
                     <div class="kpi-sub">
-                      1) <b>Deficit ↑ → supply ↑ → term premium ↑ → duration perde</b><br/>
-                      2) <b>Term premium ↑ + USD ↑ → tightening globale → risk-off</b><br/>
-                      3) <b>Debt service ↑ → pressione politica → repressione finanziaria</b><br/>
-                      4) <b>Repressione = real rates compressi → real assets hedge</b><br/>
-                      5) <b>Current account deficit → dipendenza estera → vulnerabilità</b>
+                      1) <b>Deficit ↑ → supply ↑ → term premium ↑ → duration suffers</b><br/>
+                      2) <b>Term premium ↑ + USD ↑ → global tightening → risk-off</b><br/>
+                      3) <b>Debt service ↑ → political pressure → financial repression risk</b><br/>
+                      4) <b>Repression = compressed real rates → real assets hedge</b><br/>
+                      5) <b>External deficits → foreign funding reliance → vulnerability</b>
                     </div>
                   </div>
                 </div>
@@ -1351,28 +1481,28 @@ def main():
                 f"<div class='tiny'>Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b></div>",
                 unsafe_allow_html=True
             )
-            st.markdown("<div class='tiny'>Tip: usa <b>Refresh data</b> in sidebar per forzare update.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='tiny'>Tip: use <b>Refresh data</b> in the sidebar to force an update.</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.expander("Come leggere score & soglie", expanded=False):
+            with st.expander("How scoring works (z5y vs pct20y)", expanded=False):
                 st.markdown(
                     """
-- Indicatori “market thermometers” (USD, spread, VIX, trend, real rates) → **z-score ~5Y** (`z5y`), clamp [-2,+2] → 0–100.
-- Indicatori “stock/structural” (debito/fiscale/estero, term premium) → **percentile ~20Y** (`pct20y`) mappato in [-2,+2] → 0–100.
-- Soglie: **>60 Risk-on**, **40–60 Neutrale**, **<40 Risk-off** (euristiche).
-- Global score = media ponderata dei **6 blocchi core** (Cross è solo conferma).
-- Nota: le “operating lines” combinano **regime (score)** + **livelli (latest CPI/breakeven)** per evitare confusione score≠livello.
+- **Market thermometers** (USD, spreads, VIX, trend, real rates): **z-score ~5Y** (`z5y`) → clamp [-2,+2] → 0–100.
+- **Structural constraints** (debt/fiscal/external, term premium): **percentile ~20Y** (`pct20y`) mapped to [-2,+2] → 0–100.
+- Thresholds (heuristics): **>60 Risk-on**, **40–60 Neutral**, **<40 Risk-off**.
+- Global score = weighted average of the **6 core blocks** (Cross is confirmation only).
+- Chart titles are **rule-based “so-what” summaries** (no LLM, no extra APIs).
                     """
                 )
 
             usd_series = indicators.get("usd_index", pd.Series(dtype=float))
             if usd_series is None or usd_series.empty:
-                st.warning("USD index vuoto: né DXY (yfinance) né proxy FRED risultano disponibili.")
+                st.warning("USD index is empty: neither yfinance DXY nor FRED proxy is available.")
             else:
-                st.caption("USD index: se DXY manca su yfinance, la dashboard usa FRED DTWEXBGS come proxy.")
+                st.caption("USD index: if yfinance DXY is missing, the dashboard uses FRED DTWEXBGS as a proxy.")
 
     # -------------------------
-    # Block render helper
+    # Block renderer
     # -------------------------
     def render_block(block_key: str):
         b = BLOCKS[block_key]
@@ -1394,29 +1524,27 @@ def main():
                     with col:
                         s = indicators.get(key, pd.Series(dtype=float))
                         if s is None or s.empty:
-                            st.warning(f"Dati mancanti per {INDICATOR_META[key]['label']}.")
+                            st.warning(f"Missing data for: {INDICATOR_META[key]['label']}")
                         else:
-                            render_tile(key, s, indicator_scores)
+                            render_tile(key, s, indicator_scores, years_back)
             elif len(row) == 1:
                 key = row[0]
                 s = indicators.get(key, pd.Series(dtype=float))
                 if s is None or s.empty:
-                    st.warning(f"Dati mancanti per {INDICATOR_META[key]['label']}.")
+                    st.warning(f"Missing data for: {INDICATOR_META[key]['label']}")
                 else:
-                    render_tile(key, s, indicator_scores)
+                    render_tile(key, s, indicator_scores, years_back)
             else:
                 cols = st.columns(len(row))
                 for col, key in zip(cols, row):
                     with col:
                         s = indicators.get(key, pd.Series(dtype=float))
                         if s is None or s.empty:
-                            st.warning(f"Dati mancanti per {INDICATOR_META[key]['label']}.")
+                            st.warning(f"Missing data for: {INDICATOR_META[key]['label']}")
                         else:
-                            render_tile(key, s, indicator_scores)
+                            render_tile(key, s, indicator_scores, years_back)
 
-    # -------------------------
-    # Tabs: blocks
-    # -------------------------
+    # Block tabs
     with tabs[1]:
         render_block("price_of_time")
     with tabs[2]:
@@ -1433,20 +1561,19 @@ def main():
         render_block("cross")
 
     # -------------------------
-    # What changed
+    # What Changed
     # -------------------------
     with tabs[8]:
-        st.markdown("### What changed – frequency-aware")
+        st.markdown("### What Changed (frequency-aware)")
         rows = []
         for key, meta in INDICATOR_META.items():
             s = indicators.get(key, pd.Series(dtype=float))
             if s is None or s.empty:
                 continue
-
             deltas = compute_deltas(s)
             rows.append(
                 {
-                    "Indicatore": meta["label"],
+                    "Indicator": meta["label"],
                     "Scoring": meta.get("scoring_mode", "z5y"),
                     "Freq": deltas["freq"],
                     deltas["label_a"]: None if np.isnan(deltas["val_a"]) else round(deltas["val_a"], 2),
@@ -1456,19 +1583,21 @@ def main():
                     "Regime": indicator_scores[key]["status"],
                 }
             )
-
         if rows:
-            df = pd.DataFrame(rows).set_index("Indicatore")
+            df = pd.DataFrame(rows).set_index("Indicator")
             st.dataframe(df, use_container_width=True)
         else:
-            st.info("Nessun dato sufficiente per calcolare variazioni.")
+            st.info("Not enough data to compute changes.")
 
     # -------------------------
     # Report
     # -------------------------
     with tabs[9]:
-        st.markdown("### Report (opzionale) – Payload per ChatGPT")
-        st.markdown("<div class='muted'>Payload copiabile: include blocchi Dalio (Debt/Fiscal + External) e modalità di scoring per evitare falsi segnali.</div>", unsafe_allow_html=True)
+        st.markdown("### Report (optional) — AI-ready payload")
+        st.markdown(
+            "<div class='muted'>Copyable payload: includes Dalio blocks (Debt/Fiscal + External) and scoring modes to reduce false signals.</div>",
+            unsafe_allow_html=True
+        )
 
         generate_payload = st.button("Generate payload")
 
@@ -1479,6 +1608,7 @@ def main():
             payload_lines.append(f"  global_score: {0.0 if np.isnan(global_score) else round(global_score, 1)}")
             payload_lines.append(f"  global_status: {global_status}")
             payload_lines.append("  scoring_notes: \"market thermometers use z5y; structural constraints use pct20y\"")
+            payload_lines.append(f"  horizon_years: {years_back}")
 
             payload_lines.append("  blocks:")
             for bkey, binfo in BLOCKS.items():
@@ -1523,21 +1653,30 @@ def main():
             payload_text = "\n".join(payload_lines)
             st.code(payload_text, language="yaml")
 
-            st.markdown("**Prompt suggerito (Dalio-aware):**")
+            st.markdown("**Suggested prompt (Dalio-aware, report-ready):**")
             st.code(
                 """
-Sei un macro strategist multi-asset. Ricevi il payload YAML sopra (dashboard macro-finance Dalio-enhanced).
+You are a multi-asset macro strategist. You receive the YAML payload above (Dalio-enhanced macro-finance dashboard).
 
-Task:
-1) Ricostruisci il regime: separa “market thermometers” (USD/spread/VIX/trend/real rates) da “constraints” (debt service/deficit/term premium/external balance).
-2) Spiega se c’è rischio di cambio regime strutturale (dominanza fiscale / repressione finanziaria / inflationary deleveraging).
-3) Produci un report operativo ETF-based:
+Deliverable: an investor-ready memo (ETF-based), written for a non-specialist but sophisticated reader.
+
+Instructions:
+1) Separate the story into:
+   A) Market thermometers (USD, HY spreads, VIX, trend, real yields)
+   B) Structural constraints (debt service, deficit, term premium, external balance)
+2) Explain whether we are drifting into a structural regime shift:
+   - fiscal dominance / financial repression
+   - inflationary deleveraging
+   - credit-driven risk-off (classic)
+3) Produce the actionable section (ETF investor):
    - Equity exposure (risk budget)
-   - Duration (short/neutral/long; nominal vs TIPS)
-   - Credit risk (IG vs HY)
+   - Duration stance (short/neutral/long; nominal vs TIPS)
+   - Credit stance (IG vs HY)
    - Hedges (USD, gold, cash-like)
-   - 3–5 trigger da monitorare nelle prossime 2–6 settimane (soglie euristiche)
-Tono concreto, prudente, implementabile.
+4) Provide 3–5 triggers to monitor over the next 2–6 weeks (with heuristic thresholds).
+5) For each core indicator, generate a sharp chart title and a 2–3 sentence “so-what” explanation.
+
+Tone: clear, concrete, implementable. Avoid jargon where possible.
                 """.strip(),
                 language="markdown"
             )
