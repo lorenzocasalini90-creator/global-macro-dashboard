@@ -113,13 +113,6 @@ st.markdown(
     box-shadow: 0 14px 38px rgba(0,0,0,0.30);
     margin-bottom: 14px;
   }
-  .wb-grid{
-    display:grid;
-    gap: 14px;
-  }
-  .wb-grid.cols-4{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .wb-grid.cols-3{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .wb-grid.cols-2{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wb-card{
     background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
     border: 1px solid var(--border);
@@ -195,7 +188,6 @@ st.markdown(
 # CONFIG: INDICATORS & BLOCKS
 # =========================
 INDICATOR_META = {
-    # 1) PRICE OF TIME
     "real_10y": {
         "label": "US 10Y TIPS Real Yield",
         "unit": "%",
@@ -251,7 +243,6 @@ INDICATOR_META = {
         },
     },
 
-    # 2) MACRO
     "breakeven_10y": {
         "label": "10Y Breakeven Inflation",
         "unit": "%",
@@ -307,7 +298,6 @@ INDICATOR_META = {
         },
     },
 
-    # 3) CONDITIONS & STRESS
     "usd_index": {
         "label": "USD Index (DXY / Broad Proxy)",
         "unit": "",
@@ -399,7 +389,6 @@ INDICATOR_META = {
         },
     },
 
-    # 4) PLUMBING
     "fed_balance_sheet": {
         "label": "Fed Balance Sheet (WALCL)",
         "unit": "bn USD",
@@ -437,7 +426,6 @@ INDICATOR_META = {
         },
     },
 
-    # 5) DALIO CORE: DEBT & FISCAL DOMINANCE
     "interest_payments": {
         "label": "US Federal Interest Payments (Quarterly)",
         "unit": "bn USD",
@@ -529,7 +517,6 @@ INDICATOR_META = {
         },
     },
 
-    # 6) EXTERNAL BALANCE
     "current_account_gdp": {
         "label": "US Current Account Balance (% of GDP)",
         "unit": "%",
@@ -549,7 +536,6 @@ INDICATOR_META = {
         },
     },
 
-    # Cross-asset confirmation (non-weighted)
     "world_equity": {
         "label": "Global Equities (URTH)",
         "unit": "",
@@ -642,7 +628,6 @@ BLOCKS = {
     },
 }
 
-# Wallboard grouping (fast thermometers vs structural constraints)
 WALLBOARD_GROUPS = {
     "Market Thermometers": {
         "desc": "Fast-moving regime signals: rates, USD, credit stress, vol, trend, risk appetite.",
@@ -830,14 +815,9 @@ def fmt_value(val, unit: str, scale: float = 1.0):
 # INSIGHT TITLES (cheap, local heuristics)
 # =========================
 def insight_title(key: str, series: pd.Series, latest: float, meta: dict, horizon_days: int) -> str:
-    """
-    Simple, deterministic "so-what" title that changes with level + direction.
-    No external calls; uses only latest and recent delta.
-    """
     d = pct_change_over_days(series, horizon_days)
     d_txt = "" if np.isnan(d) else ("rising" if d > 0 else "falling" if d < 0 else "flat")
 
-    # Use ref lines where available for a level context
     ref = meta.get("ref_line", None)
     above = None
     if ref is not None and not (isinstance(ref, float) and np.isnan(ref)):
@@ -846,7 +826,6 @@ def insight_title(key: str, series: pd.Series, latest: float, meta: dict, horizo
         except Exception:
             above = None
 
-    # Hand-crafted, concise templates
     if key in ("real_10y", "nominal_10y"):
         if above is True:
             return f"Tightening bias: yields above reference ({d_txt})"
@@ -915,7 +894,6 @@ def plot_premium(series: pd.Series, title_text: str, ref_line=None, height: int 
         except Exception:
             pass
 
-    # Title INSIDE chart (top-left), WHITE
     fig.add_annotation(
         xref="paper", yref="paper",
         x=0.01, y=0.99,
@@ -944,7 +922,7 @@ def plot_premium(series: pd.Series, title_text: str, ref_line=None, height: int 
 def plot_sparkline(series: pd.Series, height: int = 95):
     s = series.dropna()
     if len(s) > 180:
-        s = s.iloc[-180:]  # keep it light
+        s = s.iloc[-180:]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=s.index, y=s.values, mode="lines", line=dict(width=2)))
     fig.update_layout(
@@ -978,7 +956,6 @@ def render_deep_dive_tile(key: str, series: pd.Series, indicator_scores: dict, h
     mode = meta.get("scoring_mode", "z5y")
     mode_badge = "<span class='pill'>z5y</span>" if mode == "z5y" else "<span class='pill'>pct20y</span>"
 
-    # So-what chart title
     t = insight_title(key, series, latest, meta, horizon_days=horizon_days)
 
     st.markdown("<div class='section-card'>", unsafe_allow_html=True)
@@ -1013,12 +990,17 @@ def render_deep_dive_tile(key: str, series: pd.Series, indicator_scores: dict, h
         )
 
     fig = plot_premium(series, title_text=t, ref_line=meta.get("ref_line", None), height=310)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"displayModeBar": False},
+        key=f"deep_{key}_{horizon_days}"
+    )
     st.markdown("</div>", unsafe_allow_html=True)
 
-def wallboard_card(key: str, series: pd.Series, indicator_scores: dict):
-    meta = INDICATOR_META[key]
-    info = indicator_scores.get(key, {})
+def wallboard_card(ind_key: str, series: pd.Series, indicator_scores: dict, instance_id: str = "0"):
+    meta = INDICATOR_META[ind_key]
+    info = indicator_scores.get(ind_key, {})
     score = info.get("score", np.nan)
     status = info.get("status", "n/a")
     latest = info.get("latest", np.nan)
@@ -1033,7 +1015,12 @@ def wallboard_card(key: str, series: pd.Series, indicator_scores: dict):
     st.markdown(f"<div class='wb-source'>{meta['source']}</div>", unsafe_allow_html=True)
 
     if series is not None and not series.dropna().empty:
-        st.plotly_chart(plot_sparkline(series, height=95), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(
+            plot_sparkline(series, height=95),
+            use_container_width=True,
+            config={"displayModeBar": False},
+            key=f"spark_{ind_key}_{instance_id}"
+        )
     else:
         st.markdown("<div class='wb-line'>Missing data</div>", unsafe_allow_html=True)
 
@@ -1069,7 +1056,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     macro = _sg(block_scores.get("macro", {}).get("score", np.nan))
     debt = _sg(block_scores.get("debt_fiscal", {}).get("score", np.nan))
 
-    # Equity budget
     if np.isnan(gs) or np.isnan(cond):
         equity = "n/a"
     elif gs >= 60 and cond >= 55:
@@ -1079,7 +1065,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         equity = "→ Neutral — moderate sizing"
 
-    # Duration stance (term premium + inflation + price of time)
     termp = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
     infl = _sg(indicator_scores.get("cpi_yoy", {}).get("score", np.nan))
 
@@ -1090,7 +1075,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         duration = "Neutral — balance term-premium risk vs cycle"
 
-    # Credit stance
     hy = _sg(indicator_scores.get("hy_oas", {}).get("score", np.nan))
     hyg = _sg(indicator_scores.get("hyg_lqd_ratio", {}).get("score", np.nan))
     ds = _sg(indicator_scores.get("interest_to_receipts", {}).get("score", np.nan))
@@ -1102,7 +1086,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         credit = "Neutral — quality bias with selectivity"
 
-    # Hedges
     usd = _sg(indicator_scores.get("usd_index", {}).get("score", np.nan))
     if (not np.isnan(debt) and debt <= 40) and (not np.isnan(infl) and infl >= 55):
         hedges = "Gold / real-asset tilt — repression/inflation risk"
@@ -1123,9 +1106,7 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Sidebar
     st.sidebar.header("Settings")
-
     layout_mode = st.sidebar.selectbox(
         "Layout mode",
         ["Auto (responsive)", "Wallboard (55\")", "Compact (mobile)"],
@@ -1147,7 +1128,6 @@ def main():
     if fred_key is None:
         st.sidebar.error("⚠️ Missing `FRED_API_KEY` in Streamlit secrets.")
 
-    # Fetch data
     with st.spinner("Loading data (FRED + yfinance)..."):
         fred = {
             "real_10y": fetch_fred_series("DFII10", start_date),
@@ -1174,20 +1154,17 @@ def main():
 
         indicators = {}
 
-        # Yield curve
         if not fred["nominal_10y"].empty and not fred["dgs2"].empty:
             yc = fred["nominal_10y"].to_frame("10y").join(fred["dgs2"].to_frame("2y"), how="inner")
             indicators["yield_curve_10_2"] = (yc["10y"] - yc["2y"]).dropna()
         else:
             indicators["yield_curve_10_2"] = pd.Series(dtype=float)
 
-        # CPI YoY
         if not fred["cpi_index"].empty:
             indicators["cpi_yoy"] = (fred["cpi_index"].pct_change(12) * 100.0).dropna()
         else:
             indicators["cpi_yoy"] = pd.Series(dtype=float)
 
-        # Core FRED
         indicators["real_10y"] = fred["real_10y"]
         indicators["nominal_10y"] = fred["nominal_10y"]
         indicators["breakeven_10y"] = fred["breakeven_10y"]
@@ -1196,14 +1173,12 @@ def main():
         indicators["fed_balance_sheet"] = fred["fed_balance_sheet"]
         indicators["rrp"] = fred["rrp"]
 
-        # Dalio series
         indicators["interest_payments"] = fred["interest_payments"]
         indicators["federal_receipts"] = fred["federal_receipts"]
         indicators["deficit_gdp"] = fred["deficit_gdp"]
         indicators["term_premium_10y"] = fred["term_premium_10y"]
         indicators["current_account_gdp"] = fred["current_account_gdp"]
 
-        # Derived: interest / receipts ratio
         ip = indicators.get("interest_payments", pd.Series(dtype=float))
         fr = indicators.get("federal_receipts", pd.Series(dtype=float))
         if ip is not None and fr is not None and (not ip.empty) and (not fr.empty):
@@ -1213,10 +1188,8 @@ def main():
         else:
             indicators["interest_to_receipts"] = pd.Series(dtype=float)
 
-        # YF
         yf_map = fetch_yf_many(["DX-Y.NYB", "^VIX", "SPY", "HYG", "LQD", "URTH", "TLT", "GLD"], start_date)
 
-        # USD index fallback
         dxy = yf_map.get("DX-Y.NYB", pd.Series(dtype=float))
         if dxy is None or dxy.empty:
             dxy = fred["usd_fred"]
@@ -1224,7 +1197,6 @@ def main():
 
         indicators["vix"] = yf_map.get("^VIX", pd.Series(dtype=float))
 
-        # SPY trend
         spy = yf_map.get("SPY", pd.Series(dtype=float))
         if spy is not None and not spy.empty:
             ma200 = spy.rolling(200).mean()
@@ -1232,7 +1204,6 @@ def main():
         else:
             indicators["spy_trend"] = pd.Series(dtype=float)
 
-        # HYG/LQD
         hyg = yf_map.get("HYG", pd.Series(dtype=float))
         lqd = yf_map.get("LQD", pd.Series(dtype=float))
         if hyg is not None and lqd is not None and (not hyg.empty) and (not lqd.empty):
@@ -1241,12 +1212,10 @@ def main():
         else:
             indicators["hyg_lqd_ratio"] = pd.Series(dtype=float)
 
-        # Cross
         indicators["world_equity"] = yf_map.get("URTH", pd.Series(dtype=float))
         indicators["duration_proxy_tlt"] = yf_map.get("TLT", pd.Series(dtype=float))
         indicators["gold"] = yf_map.get("GLD", pd.Series(dtype=float))
 
-    # Score indicators
     indicator_scores = {}
     for key, meta in INDICATOR_META.items():
         series = indicators.get(key, pd.Series(dtype=float))
@@ -1254,7 +1223,6 @@ def main():
         score, sig, latest = compute_indicator_score(series, meta["direction"], scoring_mode=mode)
         indicator_scores[key] = {"score": score, "signal": sig, "latest": latest, "status": classify_status(score), "mode": mode}
 
-    # Score blocks + global (exclude cross)
     block_scores = {}
     global_score = 0.0
     w_used = 0.0
@@ -1276,11 +1244,9 @@ def main():
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
 
-    # Data freshness
     latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
     data_max_date = max(latest_points) if latest_points else None
 
-    # Risk legend (where it belongs: always visible, short)
     st.markdown(
         f"""
 <div class="section-card">
@@ -1295,39 +1261,24 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Tabs
     tabs = st.tabs(["Overview", "Wallboard", "Deep Dive", "What changed", "Report"])
 
-    # =========================
-    # OVERVIEW
-    # =========================
     with tabs[0]:
         left, right = st.columns([2.2, 1.0])
 
         with left:
             st.markdown("### Executive Snapshot")
-
             gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
-
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-            # Block summary: name -> regime -> score (with semaforo)
             def block_line(bkey: str):
                 sc = block_scores.get(bkey, {}).get("score", np.nan)
                 stt = block_scores.get(bkey, {}).get("status", "n/a")
                 sc_txt = "n/a" if np.isnan(sc) else f"{sc:.1f}"
                 return f"{BLOCKS[bkey]['name']}: {status_pill_html(stt)} <b>({sc_txt})</b>"
 
-            block_lines_thermo = [
-                block_line("price_of_time"),
-                block_line("macro"),
-                block_line("conditions"),
-                block_line("plumbing"),
-            ]
-            block_lines_struct = [
-                block_line("debt_fiscal"),
-                block_line("external"),
-            ]
+            thermo_lines = [block_line(k) for k in ["price_of_time", "macro", "conditions", "plumbing"]]
+            struct_lines = [block_line(k) for k in ["debt_fiscal", "external"]]
 
             st.markdown(
                 f"""
@@ -1346,9 +1297,9 @@ def main():
 
   <div class="kpi-card">
     <div class="kpi-title">Block scores — name → regime → score</div>
-    <div class="kpi-sub"><b>Market thermometers</b><br/>{'<br/>'.join(block_lines_thermo)}</div>
+    <div class="kpi-sub"><b>Market thermometers</b><br/>{'<br/>'.join(thermo_lines)}</div>
     <hr/>
-    <div class="kpi-sub"><b>Structural constraints</b><br/>{'<br/>'.join(block_lines_struct)}</div>
+    <div class="kpi-sub"><b>Structural constraints</b><br/>{'<br/>'.join(struct_lines)}</div>
   </div>
 
   <div class="kpi-card">
@@ -1363,14 +1314,6 @@ def main():
   </div>
 </div>
                 """,
-                unsafe_allow_html=True
-            )
-
-            cross_sc = block_scores.get("cross", {}).get("score", np.nan)
-            cross_st = block_scores.get("cross", {}).get("status", "n/a")
-            cross_txt = "n/a" if np.isnan(cross_sc) else f"{cross_sc:.1f}"
-            st.markdown(
-                f"<div class='section-card'><div class='tiny'>Cross confirmation (non-weighted): <b>{cross_txt}</b> {status_pill_html(cross_st)}</div></div>",
                 unsafe_allow_html=True
             )
 
@@ -1405,17 +1348,11 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
                     """.strip()
                 )
 
-    # =========================
-    # WALLBOARD
-    # =========================
     with tabs[1]:
         st.markdown("## Wallboard (grouped, consistent)")
-
-        # hero
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-        # Block summary lines: name -> regime -> score (with semaforo) (like you requested)
         thermo_keys = ["price_of_time", "macro", "conditions", "plumbing"]
         struct_keys = ["debt_fiscal", "external"]
 
@@ -1454,7 +1391,6 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
             )
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # layout columns by mode
         if layout_mode == "Wallboard (55\")":
             cols = 4
         elif layout_mode == "Compact (mobile)":
@@ -1462,16 +1398,13 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
         else:
             cols = 3
 
-        # groups (macro tiles)
         for gname, ginfo in WALLBOARD_GROUPS.items():
             st.markdown(f"### {gname}")
             st.markdown(f"<div class='muted'>{ginfo['desc']}</div>", unsafe_allow_html=True)
 
             keys = ginfo["keys"]
-
-            # render in consistent grid
             rows = [keys[i:i+cols] for i in range(0, len(keys), cols)]
-            for r in rows:
+            for r_i, r in enumerate(rows):
                 c = st.columns(cols)
                 for idx in range(cols):
                     if idx < len(r):
@@ -1479,14 +1412,14 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
                         s = indicators.get(k, pd.Series(dtype=float))
                         with c[idx]:
                             if s is None or s.empty:
-                                # consistent missing-card look
                                 st.markdown("<div class='wb-card'>", unsafe_allow_html=True)
                                 st.markdown(f"<h4>{INDICATOR_META[k]['label']}</h4>", unsafe_allow_html=True)
                                 st.markdown(f"<div class='wb-source'>{INDICATOR_META[k]['source']}</div>", unsafe_allow_html=True)
                                 st.markdown("<div class='wb-line'><b>Missing:</b> no data available</div>", unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
                             else:
-                                wallboard_card(k, s, indicator_scores)
+                                # instance_id ensures uniqueness even if same chart appears elsewhere
+                                wallboard_card(k, s, indicator_scores, instance_id=f"group_{gname}_{r_i}_{idx}")
                     else:
                         with c[idx]:
                             st.markdown("<div style='height:1px'></div>", unsafe_allow_html=True)
@@ -1495,7 +1428,7 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
             cols2 = 3 if layout_mode != "Compact (mobile)" else 2
             all_keys = list(INDICATOR_META.keys())
             rows = [all_keys[i:i+cols2] for i in range(0, len(all_keys), cols2)]
-            for r in rows:
+            for r_i, r in enumerate(rows):
                 c = st.columns(cols2)
                 for i, k in enumerate(r):
                     with c[i]:
@@ -1503,15 +1436,11 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
                         if s is None or s.empty:
                             st.caption(f"{INDICATOR_META[k]['label']} — missing")
                         else:
-                            wallboard_card(k, s, indicator_scores)
+                            wallboard_card(k, s, indicator_scores, instance_id=f"all_{r_i}_{i}")
 
-    # =========================
-    # DEEP DIVE
-    # =========================
     with tabs[2]:
         st.markdown("## Deep Dive (charts)")
 
-        # When on a big screen, make it more synoptic: 2 columns; on mobile 1 column
         if layout_mode == "Wallboard (55\")":
             per_row = 2
         elif layout_mode == "Compact (mobile)":
@@ -1519,7 +1448,6 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
         else:
             per_row = 2
 
-        # Render by blocks for structure
         for bkey in ["price_of_time", "macro", "conditions", "plumbing", "debt_fiscal", "external", "cross"]:
             b = BLOCKS[bkey]
             st.markdown(f"### {b['name']}")
@@ -1545,9 +1473,6 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
                         else:
                             render_deep_dive_tile(k, s, indicator_scores, horizon_days=horizon_days)
 
-    # =========================
-    # WHAT CHANGED
-    # =========================
     with tabs[3]:
         st.markdown("## What changed — Δ 7d / 30d / 1Y")
         st.markdown(
@@ -1588,8 +1513,6 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
 
         if rows:
             df = pd.DataFrame(rows)
-
-            # Make indicator names readable (wrap + width). Streamlit column config helps readability.
             st.dataframe(
                 df,
                 use_container_width=True,
@@ -1615,9 +1538,6 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
         else:
             st.info("Not enough data to compute deltas yet.")
 
-    # =========================
-    # REPORT
-    # =========================
     with tabs[4]:
         st.markdown("## Report (optional) — Payload for ChatGPT")
         st.markdown(
@@ -1626,7 +1546,7 @@ Global score sets the *risk budget*, while **Debt/Fiscal + Term premium** tells 
             unsafe_allow_html=True
         )
 
-        generate_payload = st.button("Generate payload")
+        generate_payload = st.button("Generate payload", key="btn_generate_payload")
 
         if generate_payload:
             payload_lines = []
