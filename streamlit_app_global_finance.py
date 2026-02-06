@@ -109,7 +109,6 @@ st.markdown(
 # Scoring modes:
 # - z5y: z-score vs last ~5y (market thermometers)
 # - pct20y: percentile vs last ~20y (structural/stock constraints)
-# - detrend_z5y: remove 5y MA then z-score (optional; not used by default)
 INDICATOR_META = {
     # -------------------------
     # BLOCCO 1 — PRICE OF TIME
@@ -228,7 +227,7 @@ INDICATOR_META = {
     },
 
     # -------------------------
-    # BLOCCO 3 — FINANCIAL CONDITIONS & STRESS (USD + CREDIT + VOL + TREND)
+    # BLOCCO 3 — FINANCIAL CONDITIONS & STRESS
     # -------------------------
     "usd_index": {
         "label": "USD index (DXY / FRED proxy)",
@@ -322,14 +321,14 @@ INDICATOR_META = {
     },
 
     # -------------------------
-    # BLOCCO 4 — LIQUIDITY PLUMBING (FED BS + RRP)
+    # BLOCCO 4 — LIQUIDITY PLUMBING
     # -------------------------
     "fed_balance_sheet": {
         "label": "Fed balance sheet (WALCL)",
         "unit": "bn USD",
         "direction": +1,
-        "source": "FRED WALCL (milioni -> bn)",
-        "scale": 1.0 / 1000.0,
+        "source": "FRED WALCL (millions USD -> bn USD)",
+        "scale": 1.0 / 1000.0,  # WALCL is in millions of USD
         "ref_line": None,
         "scoring_mode": "z5y",
         "expander": {
@@ -346,7 +345,7 @@ INDICATOR_META = {
         "label": "Fed Overnight RRP",
         "unit": "bn USD",
         "direction": -1,
-        "source": "FRED RRPONTSYD",
+        "source": "FRED RRPONTSYD (typically bn USD)",
         "scale": 1.0,
         "ref_line": 0.0,
         "scoring_mode": "z5y",
@@ -368,8 +367,8 @@ INDICATOR_META = {
         "label": "US Federal interest payments (quarterly)",
         "unit": "bn USD",
         "direction": -1,
-        "source": "FRED A091RC1Q027SBEA (bil$) / (Interest payments)",
-        "scale": 1.0,  # already billions
+        "source": "FRED A091RC1Q027SBEA (billions, quarterly)",
+        "scale": 1.0,
         "ref_line": None,
         "scoring_mode": "pct20y",
         "expander": {
@@ -386,7 +385,7 @@ INDICATOR_META = {
         "label": "US Federal current receipts (quarterly)",
         "unit": "bn USD",
         "direction": +1,
-        "source": "FRED FGRECPT (bil$) / (Federal Government Current Receipts)",
+        "source": "FRED FGRECPT (billions, quarterly)",
         "scale": 1.0,
         "ref_line": None,
         "scoring_mode": "pct20y",
@@ -422,9 +421,9 @@ INDICATOR_META = {
         "label": "Federal surplus/deficit as % of GDP",
         "unit": "%",
         "direction": -1,
-        "source": "FRED FYFSGDA188S",
+        "source": "FRED FYFSGDA188S (% GDP, annual)",
         "scale": 1.0,
-        "ref_line": -3.0,  # euristico: deficit oltre -3% spesso “alto” in tempi normali
+        "ref_line": -3.0,
         "scoring_mode": "pct20y",
         "expander": {
             "what": "Saldo federale (% PIL). Valori negativi = deficit.",
@@ -456,13 +455,13 @@ INDICATOR_META = {
     },
 
     # -------------------------
-    # BLOCCO 6 — EXTERNAL BALANCE (WHO FUNDS WHO)
+    # BLOCCO 6 — EXTERNAL BALANCE
     # -------------------------
     "current_account_gdp": {
         "label": "US Current account balance (% of GDP)",
         "unit": "%",
-        "direction": +1,  # surplus “better”; deficit (negative) “worse”
-        "source": "FRED USAB6BLTT02STSAQ (percent of GDP, quarterly)",
+        "direction": +1,
+        "source": "FRED USAB6BLTT02STSAQ (% GDP, quarterly)",
         "scale": 1.0,
         "ref_line": 0.0,
         "scoring_mode": "pct20y",
@@ -478,7 +477,7 @@ INDICATOR_META = {
     },
 
     # -------------------------
-    # CROSS-ASSET CONFIRMATION (non core dalio, ma utile)
+    # CROSS-ASSET CONFIRMATION
     # -------------------------
     "world_equity": {
         "label": "Global equities (URTH)",
@@ -510,8 +509,6 @@ INDICATOR_META = {
             "what": "Treasury lunga duration (hedge tipico in risk-off).",
             "reference": "Rally TLT spesso coincide con flight-to-quality.",
             "interpretation": (
-                # NB: direction è -1 perché, nel tuo schema precedente, bond che salgono spesso indicano easing/risk-off.
-                # Qui manteniamo coerenente con scoring “risk regime”.
                 "- **TLT ↑** → spesso risk-off / easing expectations.\n"
                 "- **TLT ↓** con yields ↑ → headwind per duration."
             ),
@@ -571,7 +568,7 @@ BLOCKS = {
     "debt_fiscal": {
         "name": "5) Dalio core — Debt sustainability & fiscal dominance",
         "weight": 0.20,
-        "indicators": ["interest_payments", "federal_receipts", "interest_to_receipts", "deficit_gdp", "term_premium_10y"],
+        "indicators": ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"],
         "layout_rows": [["interest_to_receipts", "deficit_gdp"], ["term_premium_10y"], ["interest_payments", "federal_receipts"]],
         "desc": "Quando il problema non è più il ciclo ma il bilancio sovrano e i vincoli di funding.",
     },
@@ -629,7 +626,7 @@ def fetch_fred_series(series_id: str, start_date: str) -> pd.Series:
                 vals.append(float(o["value"]))
             except Exception:
                 vals.append(np.nan)
-        s = pd.Series(vals, index=idx).replace({".": np.nan}).astype(float).sort_index()
+        s = pd.Series(vals, index=idx).astype(float).sort_index()
         return s
     except Exception:
         return pd.Series(dtype=float)
@@ -661,10 +658,39 @@ def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
 
 
 # =========================
-# SCORING (z5y vs pct20y)
+# FREQUENCY-AWARE DELTAS
 # =========================
 
-def pct_change_over_days(series: pd.Series, days: int) -> float:
+def infer_frequency(series: pd.Series) -> str:
+    """
+    Rough frequency classification based on median spacing in days.
+    Returns one of: 'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'unknown'
+    """
+    if series is None:
+        return "unknown"
+    s = series.dropna()
+    if len(s) < 6:
+        return "unknown"
+    idx = pd.to_datetime(s.index).sort_values()
+    diffs = idx.to_series().diff().dropna().dt.days
+    if diffs.empty:
+        return "unknown"
+    med = float(diffs.median())
+
+    if med <= 5:
+        return "daily"
+    if med <= 12:
+        return "weekly"
+    if med <= 45:
+        return "monthly"
+    if med <= 120:
+        return "quarterly"
+    if med <= 500:
+        return "annual"
+    return "unknown"
+
+
+def pct_change_by_days(series: pd.Series, days: int) -> float:
     if series is None or series.empty:
         return np.nan
     s = series.dropna()
@@ -682,10 +708,101 @@ def pct_change_over_days(series: pd.Series, days: int) -> float:
     return (curr_val / past_val - 1.0) * 100.0
 
 
+def pct_change_by_periods(series: pd.Series, periods_back: int) -> float:
+    if series is None or series.empty:
+        return np.nan
+    s = series.dropna()
+    if len(s) <= periods_back:
+        return np.nan
+    curr_val = s.iloc[-1]
+    past_val = s.iloc[-(periods_back + 1)]
+    if pd.isna(past_val) or pd.isna(curr_val) or past_val == 0:
+        return np.nan
+    return (curr_val / past_val - 1.0) * 100.0
+
+
+def compute_deltas(series: pd.Series) -> dict:
+    """
+    Returns:
+      {
+        "label_a": "Δ7d", "val_a": float or nan,
+        "label_b": "Δ30d", "val_b": float or nan,
+        "label_c": "Δ1Y", "val_c": float or nan,
+        "freq": "daily|weekly|monthly|quarterly|annual|unknown"
+      }
+    For slower series, uses period-based deltas (1Q/4Q, 1Y/5Y) instead of days-based.
+    """
+    freq = infer_frequency(series)
+
+    if freq in ("daily", "weekly", "unknown"):
+        return {
+            "freq": freq,
+            "label_a": "Δ7d",
+            "val_a": pct_change_by_days(series, 7),
+            "label_b": "Δ30d",
+            "val_b": pct_change_by_days(series, 30),
+            "label_c": "Δ1Y",
+            "val_c": pct_change_by_days(series, 365),
+        }
+
+    if freq == "monthly":
+        return {
+            "freq": freq,
+            "label_a": "Δ1M",
+            "val_a": pct_change_by_periods(series, 1),
+            "label_b": "Δ3M",
+            "val_b": pct_change_by_periods(series, 3),
+            "label_c": "Δ12M",
+            "val_c": pct_change_by_periods(series, 12),
+        }
+
+    if freq == "quarterly":
+        return {
+            "freq": freq,
+            "label_a": "Δ1Q",
+            "val_a": pct_change_by_periods(series, 1),
+            "label_b": "Δ4Q",
+            "val_b": pct_change_by_periods(series, 4),
+            "label_c": "Δ8Q",
+            "val_c": pct_change_by_periods(series, 8),
+        }
+
+    if freq == "annual":
+        return {
+            "freq": freq,
+            "label_a": "Δ1Y",
+            "val_a": pct_change_by_periods(series, 1),
+            "label_b": "Δ3Y",
+            "val_b": pct_change_by_periods(series, 3),
+            "label_c": "Δ5Y",
+            "val_c": pct_change_by_periods(series, 5),
+        }
+
+    return {
+        "freq": freq,
+        "label_a": "Δ7d",
+        "val_a": pct_change_by_days(series, 7),
+        "label_b": "Δ30d",
+        "val_b": pct_change_by_days(series, 30),
+        "label_c": "Δ1Y",
+        "val_c": pct_change_by_days(series, 365),
+    }
+
+
+def fmt_delta(val: float) -> str:
+    if val is None or (isinstance(val, float) and np.isnan(val)):
+        return "n/a"
+    return f"{val:+.1f}%"
+
+
+# =========================
+# SCORING (z5y vs pct20y)
+# =========================
+
 def rolling_percentile_last(hist: pd.Series, latest: float) -> float:
     """Percentile rank of latest within hist (0..1)."""
     h = hist.dropna()
-    if len(h) < 10 or pd.isna(latest):
+    if len(h) < 8 or pd.isna(latest):
         return np.nan
     return float((h <= latest).mean())
 
@@ -693,31 +810,35 @@ def rolling_percentile_last(hist: pd.Series, latest: float) -> float:
 def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str = "z5y"):
     """
     Returns: (score_0_100, signal, latest)
-    signal = z-score (for z5y) or percentile-mapped score (for pct20y) (both roughly comparable)
+    signal = z-score (for z5y) or percentile-mapped signal in [-2,+2] (for pct20y)
     """
     if series is None or series.empty:
         return np.nan, np.nan, np.nan
     s = series.dropna()
-    if len(s) < 20:
-        return np.nan, np.nan, s.iloc[-1]
+    if len(s) < 8:
+        return np.nan, np.nan, (np.nan if len(s) == 0 else float(s.iloc[-1]))
 
     latest = float(s.iloc[-1])
     end = s.index.max()
 
     if scoring_mode == "pct20y":
+        # allow fewer observations; structural series can be quarterly/annual
         start = end - DateOffset(years=20)
         hist = s[s.index >= start]
-        if len(hist) < 20:
-            hist = s
+        if len(hist) < 8:
+            # if we don't have enough for a meaningful percentile, return n/a
+            return np.nan, np.nan, latest
         p = rolling_percentile_last(hist, latest)  # 0..1
-        # map percentile to an approx "z-like" score in [-2, +2] via linear transform around 0.5
-        # (0 -> -2, 0.5 -> 0, 1 -> +2)
-        sig = (p - 0.5) * 4.0
+        if np.isnan(p):
+            return np.nan, np.nan, latest
+        sig = (p - 0.5) * 4.0  # 0->-2, 0.5->0, 1->+2
     else:
-        # default z5y
+        # z5y: needs enough observations to be stable
+        if len(s) < 20:
+            return np.nan, np.nan, latest
         start = end - DateOffset(years=5)
         hist = s[s.index >= start]
-        if len(hist) < 10:
+        if len(hist) < 20:
             hist = s
         mean = float(hist.mean())
         std = float(hist.std())
@@ -821,13 +942,9 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
     latest = s_info.get("latest", np.nan)
     mode = meta.get("scoring_mode", "z5y")
 
-    d7 = pct_change_over_days(series, 7)
-    d30 = pct_change_over_days(series, 30)
-    d1y = pct_change_over_days(series, 365)
-
+    deltas = compute_deltas(series)
     score_txt = "n/a" if np.isnan(score) else f"{score:.1f}"
     latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
-
     mode_badge = "<span class='pill'>score: z5y</span>" if mode == "z5y" else "<span class='pill'>score: pct20y</span>"
 
     st.markdown("<div class='section-card'>", unsafe_allow_html=True)
@@ -840,7 +957,7 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
           </div>
           <div style='text-align:right'>
             <div>{mode_badge}<span class='pill'>Ultimo: {latest_txt}</span>{status_pill_html(status)}</div>
-            <div class='tiny'>Score: {score_txt} · Δ30d: {("n/a" if np.isnan(d30) else f"{d30:+.1f}%")}</div>
+            <div class='tiny'>Score: {score_txt} · {deltas["label_b"]}: {fmt_delta(deltas["val_b"])}</div>
           </div>
         </div>
         """,
@@ -856,9 +973,9 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
         st.markdown(f"**Ponte (Dalio)**: {exp.get('dalio_bridge','')}")
         st.markdown(
             f"**What changed**: "
-            f"{'n/a' if np.isnan(d7) else f'{d7:+.1f}%'} (7d), "
-            f"{'n/a' if np.isnan(d30) else f'{d30:+.1f}%'} (30d), "
-            f"{'n/a' if np.isnan(d1y) else f'{d1y:+.1f}%'} (1Y)"
+            f"{deltas['label_a']} {fmt_delta(deltas['val_a'])}, "
+            f"{deltas['label_b']} {fmt_delta(deltas['val_b'])}, "
+            f"{deltas['label_c']} {fmt_delta(deltas['val_c'])}"
         )
 
     fig = plot_premium(series, meta["label"], ref_line=meta.get("ref_line", None))
@@ -870,13 +987,19 @@ def render_tile(key: str, series: pd.Series, indicator_scores: dict):
 # DALIO OPERATING LINES (ETF-BASED)
 # =========================
 
+def latest_value(indicator_scores: dict, key: str) -> float:
+    v = indicator_scores.get(key, {}).get("latest", np.nan)
+    return np.nan if v is None else float(v) if not (isinstance(v, float) and np.isnan(v)) else np.nan
+
+
 def operating_lines(block_scores: dict, indicator_scores: dict):
     """
-    Produce 4 decision-friendly lines:
+    4 decision-friendly lines:
     - Equity risk budget
     - Duration stance
     - Credit stance
     - Hedges
+    NOTE: uses a mix of block scores (regime) + SELECTED latest values (levels), to avoid score/level confusion.
     """
     gs = block_scores.get("GLOBAL", {}).get("score", np.nan)
 
@@ -886,8 +1009,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
 
     # Equity budget: mostly global + conditions
     cond = _sg(block_scores.get("conditions", {}).get("score", np.nan))
-    debt = _sg(block_scores.get("debt_fiscal", {}).get("score", np.nan))
-    macro = _sg(block_scores.get("macro", {}).get("score", np.nan))
 
     if not np.isnan(gs):
         if gs >= 60 and cond >= 55:
@@ -899,17 +1020,22 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         equity = "n/a"
 
-    # Duration stance: price_of_time + term premium + inflation
+    # Duration stance: combine regime (price_of_time) + LEVELS (CPI, term premium)
     pot = _sg(block_scores.get("price_of_time", {}).get("score", np.nan))
-    termp = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
-    infl = _sg(indicator_scores.get("cpi_yoy", {}).get("score", np.nan))
+    termp_score = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
 
-    # Heuristic:
-    # - term premium stress (low score) => prefer short/tilt to TIPS/quality, avoid long nominal
-    # - disinflation + easing (price_of_time high) => long duration can hedge
-    if termp <= 40 and infl <= 45:
+    cpi_latest = latest_value(indicator_scores, "cpi_yoy")          # LEVEL in %
+    breakeven_latest = latest_value(indicator_scores, "breakeven_10y")  # LEVEL in %
+
+    # Heuristic logic (level-aware):
+    # - if term premium stress + inflation elevated -> avoid long nominal, prefer short/TIPS
+    # - if disinflation and price_of_time improving and term premium benign -> long duration can hedge
+    inflation_elevated = (not np.isnan(cpi_latest) and cpi_latest >= 3.0) or (not np.isnan(breakeven_latest) and breakeven_latest >= 2.7)
+    inflation_benign = (not np.isnan(cpi_latest) and cpi_latest <= 2.6) and (np.isnan(breakeven_latest) or breakeven_latest <= 2.6)
+
+    if termp_score <= 40 and inflation_elevated:
         duration = "short/neutral — evita long nominal; preferisci qualità / TIPS"
-    elif pot <= 40 and infl <= 45 and termp >= 55:
+    elif pot >= 55 and inflation_benign and termp_score >= 55:
         duration = "long (hedge) — disinflation + duration torna difensiva"
     else:
         duration = "neutral — bilancia rischio term premium vs ciclo"
@@ -926,11 +1052,11 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         credit = "neutral — qualità con selettività"
 
-    # Hedges: USD vs Gold vs Cash-like (policy/fiscal)
+    # Hedges: USD vs Gold vs Cash-like (policy/fiscal) — mix regime + inflation level
     usd = _sg(indicator_scores.get("usd_index", {}).get("score", np.nan))
     dalio = _sg(block_scores.get("debt_fiscal", {}).get("score", np.nan))
 
-    if dalio <= 40 and infl >= 55:
+    if dalio <= 40 and inflation_elevated:
         hedges = "Gold / real-asset tilt — rischio repressione / inflazione tollerata"
     elif usd <= 40 and cond <= 45:
         hedges = "USD / cash-like — funding stress"
@@ -968,7 +1094,6 @@ def main():
 
     # Fetch data
     with st.spinner("Caricamento dati (FRED + yfinance)..."):
-        # --- FRED (core + dalio)
         fred = {
             # Price of time
             "real_10y": fetch_fred_series("DFII10", start_date),
@@ -989,13 +1114,13 @@ def main():
             "rrp": fetch_fred_series("RRPONTSYD", start_date),
 
             # Dalio: debt & fiscal
-            "interest_payments": fetch_fred_series("A091RC1Q027SBEA", start_date),  # bil$ quarterly
-            "federal_receipts": fetch_fred_series("FGRECPT", start_date),           # bil$ quarterly
-            "deficit_gdp": fetch_fred_series("FYFSGDA188S", start_date),            # % GDP annual
-            "term_premium_10y": fetch_fred_series("ACMTP10", start_date),           # % daily (may be sparse)
+            "interest_payments": fetch_fred_series("A091RC1Q027SBEA", start_date),
+            "federal_receipts": fetch_fred_series("FGRECPT", start_date),
+            "deficit_gdp": fetch_fred_series("FYFSGDA188S", start_date),
+            "term_premium_10y": fetch_fred_series("ACMTP10", start_date),
 
             # External
-            "current_account_gdp": fetch_fred_series("USAB6BLTT02STSAQ", start_date),  # % GDP quarterly
+            "current_account_gdp": fetch_fred_series("USAB6BLTT02STSAQ", start_date),
         }
 
         indicators = {}
@@ -1018,7 +1143,6 @@ def main():
         indicators["nominal_10y"] = fred["nominal_10y"]
         indicators["breakeven_10y"] = fred["breakeven_10y"]
         indicators["unemployment_rate"] = fred["unemployment_rate"]
-
         indicators["hy_oas"] = fred["hy_oas"]
         indicators["fed_balance_sheet"] = fred["fed_balance_sheet"]
         indicators["rrp"] = fred["rrp"]
@@ -1035,7 +1159,6 @@ def main():
         fr = indicators.get("federal_receipts", pd.Series(dtype=float))
         if ip is not None and fr is not None and (not ip.empty) and (not fr.empty):
             join = ip.to_frame("interest").join(fr.to_frame("receipts"), how="inner").dropna()
-            # avoid divide by zero
             join = join[join["receipts"] != 0]
             indicators["interest_to_receipts"] = (join["interest"] / join["receipts"]).dropna()
         else:
@@ -1097,7 +1220,6 @@ def main():
     w_used = 0.0
     for bkey, binfo in BLOCKS.items():
         if bkey == "cross":
-            # non-weighted
             vals = []
             for ikey in binfo["indicators"]:
                 sc = indicator_scores.get(ikey, {}).get("score", np.nan)
@@ -1112,6 +1234,7 @@ def main():
             sc = indicator_scores.get(ikey, {}).get("score", np.nan)
             if not np.isnan(sc):
                 vals.append(sc)
+
         if vals:
             bscore = float(np.mean(vals))
             block_scores[bkey] = {"score": bscore, "status": classify_status(bscore)}
@@ -1126,7 +1249,7 @@ def main():
 
     # Data freshness
     latest_points = []
-    for k, s in indicators.items():
+    for _, s in indicators.items():
         if s is not None and not s.empty:
             latest_points.append(s.index.max())
     data_max_date = max(latest_points) if latest_points else None
@@ -1153,13 +1276,10 @@ def main():
 
         with left:
             st.markdown("### Executive snapshot (con layer Dalio)")
-
             gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
-            # operating lines
             eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-            # block display helper
             def _btxt(k):
                 sc = block_scores.get(k, {}).get("score", np.nan)
                 stt = block_scores.get(k, {}).get("status", "n/a")
@@ -1214,7 +1334,6 @@ def main():
                 unsafe_allow_html=True
             )
 
-            # mini “confirmation strip” (non pesa nel global)
             cross_sc = block_scores.get("cross", {}).get("score", np.nan)
             cross_st = block_scores.get("cross", {}).get("status", "n/a")
             cross_txt = "n/a" if np.isnan(cross_sc) else f"{cross_sc:.1f}"
@@ -1242,6 +1361,7 @@ def main():
 - Indicatori “stock/structural” (debito/fiscale/estero, term premium) → **percentile ~20Y** (`pct20y`) mappato in [-2,+2] → 0–100.
 - Soglie: **>60 Risk-on**, **40–60 Neutrale**, **<40 Risk-off** (euristiche).
 - Global score = media ponderata dei **6 blocchi core** (Cross è solo conferma).
+- Nota: le “operating lines” combinano **regime (score)** + **livelli (latest CPI/breakeven)** per evitare confusione score≠livello.
                     """
                 )
 
@@ -1285,7 +1405,6 @@ def main():
                 else:
                     render_tile(key, s, indicator_scores)
             else:
-                # in case you add 3-wide rows later
                 cols = st.columns(len(row))
                 for col, key in zip(cols, row):
                     with col:
@@ -1317,23 +1436,27 @@ def main():
     # What changed
     # -------------------------
     with tabs[8]:
-        st.markdown("### What changed – Δ 7d / 30d / 1Y")
+        st.markdown("### What changed – frequency-aware")
         rows = []
         for key, meta in INDICATOR_META.items():
             s = indicators.get(key, pd.Series(dtype=float))
             if s is None or s.empty:
                 continue
+
+            deltas = compute_deltas(s)
             rows.append(
                 {
                     "Indicatore": meta["label"],
                     "Scoring": meta.get("scoring_mode", "z5y"),
-                    "Δ 7d %": None if np.isnan(pct_change_over_days(s, 7)) else round(pct_change_over_days(s, 7), 2),
-                    "Δ 30d %": None if np.isnan(pct_change_over_days(s, 30)) else round(pct_change_over_days(s, 30), 2),
-                    "Δ 1Y %": None if np.isnan(pct_change_over_days(s, 365)) else round(pct_change_over_days(s, 365), 2),
+                    "Freq": deltas["freq"],
+                    deltas["label_a"]: None if np.isnan(deltas["val_a"]) else round(deltas["val_a"], 2),
+                    deltas["label_b"]: None if np.isnan(deltas["val_b"]) else round(deltas["val_b"], 2),
+                    deltas["label_c"]: None if np.isnan(deltas["val_c"]) else round(deltas["val_c"], 2),
                     "Score": None if np.isnan(indicator_scores[key]["score"]) else round(indicator_scores[key]["score"], 1),
                     "Regime": indicator_scores[key]["status"],
                 }
             )
+
         if rows:
             df = pd.DataFrame(rows).set_index("Indicatore")
             st.dataframe(df, use_container_width=True)
@@ -1383,16 +1506,19 @@ def main():
                 status = s_info.get("status", "n/a")
                 latest = s_info.get("latest", np.nan)
                 series = indicators.get(key, pd.Series(dtype=float))
-                d30 = pct_change_over_days(series, 30)
+                deltas = compute_deltas(series)
                 mode = meta.get("scoring_mode", "z5y")
 
                 payload_lines.append(f"    - name: \"{meta['label']}\"")
                 payload_lines.append(f"      key: \"{key}\"")
                 payload_lines.append(f"      scoring_mode: \"{mode}\"")
+                payload_lines.append(f"      freq: \"{deltas['freq']}\"")
                 payload_lines.append(f"      latest_value: \"{fmt_value(latest, meta['unit'], meta.get('scale', 1.0))}\"")
                 payload_lines.append(f"      score: {0.0 if np.isnan(score) else round(score, 1)}")
                 payload_lines.append(f"      status: {status}")
-                payload_lines.append(f"      delta_30d_pct: {0.0 if np.isnan(d30) else round(d30, 2)}")
+                payload_lines.append(f"      change_a: \"{deltas['label_a']} {fmt_delta(deltas['val_a'])}\"")
+                payload_lines.append(f"      change_b: \"{deltas['label_b']} {fmt_delta(deltas['val_b'])}\"")
+                payload_lines.append(f"      change_c: \"{deltas['label_c']} {fmt_delta(deltas['val_c'])}\"")
 
             payload_text = "\n".join(payload_lines)
             st.code(payload_text, language="yaml")
