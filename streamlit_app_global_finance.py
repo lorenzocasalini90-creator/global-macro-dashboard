@@ -863,16 +863,107 @@ def _esc(x: str) -> str:
     return _html.escape("" if x is None else str(x))
 
 def render_tile(fragment_html: str, height: int = 210):
-    # A full HTML doc to ensure CSS vars resolve and no “partial HTML” weirdness
+    # NOTE: components.html runs inside an iframe -> it does NOT inherit Streamlit CSS.
+    # We inject a minimal, self-contained CSS to keep tiles readable & stable.
+    tile_css = """
+    <style>
+      :root{
+        --bg:#0b0f19;
+        --card:#0f1629;
+        --border:rgba(255,255,255,0.10);
+        --muted:rgba(255,255,255,0.72);
+        --text:rgba(255,255,255,0.94);
+
+        --good:rgba(34,197,94,1);
+        --warn:rgba(245,158,11,1);
+        --bad:rgba(239,68,68,1);
+      }
+
+      html, body{
+        margin:0; padding:0;
+        background: transparent;
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      }
+
+      /* Tile styles (minimal subset) */
+      .wbTile{
+        background: rgba(255,255,255,0.028);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 14px 14px 12px 14px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+        min-height: 156px;
+        display:flex;
+        flex-direction:column;
+        justify-content:space-between;
+      }
+      .wbName{ font-size: 0.98rem; font-weight: 850; color: rgba(255,255,255,0.96); margin-bottom: 2px; }
+      .wbMeta{ font-size: 0.86rem; color: var(--muted); margin-bottom: 8px; }
+      .wbRow{ display:flex; align-items:baseline; justify-content:space-between; gap: 10px; }
+      .wbVal{ font-size: 1.65rem; font-weight: 900; letter-spacing:-0.01em; color: rgba(255,255,255,0.96); }
+      .wbSmall{ font-size: 0.88rem; color: var(--muted); }
+      .wbFoot{ display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-top: 10px; }
+
+      /* Pills */
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.04);
+        font-size: 0.88rem;
+        color: rgba(255,255,255,0.94);
+        white-space: nowrap;
+      }
+      .dot{ width: 11px; height: 11px; border-radius: 999px; display:inline-block; }
+      .pill.good{ border-color: rgba(34,197,94,0.40); background: rgba(34,197,94,0.12); }
+      .pill.warn{ border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.12); }
+      .pill.bad { border-color: rgba(239,68,68,0.40); background: rgba(239,68,68,0.12); }
+
+      /* Score bar */
+      .barWrap{
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.08);
+        position: relative;
+        overflow:hidden;
+      }
+      .barFill{
+        height: 100%;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.14);
+        width: 100%;
+        opacity: 0.55;
+      }
+      .barMark{
+        position:absolute;
+        top:-4px;
+        width: 3px;
+        height: 18px;
+        border-radius: 2px;
+        background: rgba(255,255,255,0.92);
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.20);
+      }
+    </style>
+    """
+
     doc = f"""
     <html>
-      <head><meta charset="utf-8"></head>
-      <body style="margin:0; padding:0; background:transparent;">
+      <head>
+        <meta charset="utf-8">
+        {tile_css}
+      </head>
+      <body>
         {fragment_html}
       </body>
     </html>
     """
     components.html(doc, height=height, scrolling=False)
+
 
 def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
     meta = INDICATOR_META[key]
