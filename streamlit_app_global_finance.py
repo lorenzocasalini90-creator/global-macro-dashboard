@@ -50,10 +50,10 @@ st.markdown(
   h1, h2, h3, h4 { color: var(--text); letter-spacing: -0.02em; }
   .muted { color: var(--muted); }
 
-  /* Tabs: make readable; selected red */
+  /* Tabs: white font; selected stays red */
   button[data-baseweb="tab"]{
-    color: rgba(255,255,255,0.90) !important;
-    font-weight: 650 !important;
+    color: rgba(255,255,255,0.92) !important;
+    font-weight: 700 !important;
     background: rgba(255,255,255,0.03) !important;
     border-radius: 10px !important;
     margin-right: 6px !important;
@@ -98,7 +98,6 @@ st.markdown(
 
   .grid3{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   .grid2{ display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-  .grid4{ display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 
   /* Pills */
   .pill{
@@ -150,7 +149,7 @@ st.markdown(
     border-radius: 18px;
     padding: 14px 14px 12px 14px;
     box-shadow: 0 10px 26px rgba(0,0,0,0.18);
-    min-height: 152px; /* keeps consistent */
+    min-height: 152px;
     display:flex;
     flex-direction:column;
     justify-content:space-between;
@@ -188,7 +187,6 @@ st.markdown(
     box-shadow: 0 0 0 2px rgba(0,0,0,0.20);
   }
 
-  /* Dataframe tweaks */
   .stDataFrame { border: 1px solid var(--border); border-radius: 12px; overflow:hidden; }
   code { color: rgba(255,255,255,0.88); }
 </style>
@@ -201,7 +199,6 @@ st.markdown(
 # ============================================================
 
 INDICATOR_META = {
-    # 1) PRICE OF TIME
     "real_10y": {
         "label": "US 10Y TIPS Real Yield",
         "unit": "%",
@@ -248,7 +245,6 @@ INDICATOR_META = {
         },
     },
 
-    # 2) MACRO CYCLE
     "breakeven_10y": {
         "label": "10Y Breakeven Inflation",
         "unit": "%",
@@ -295,7 +291,6 @@ INDICATOR_META = {
         },
     },
 
-    # 3) CONDITIONS & STRESS
     "usd_index": {
         "label": "USD Index (DXY / Broad Proxy)",
         "unit": "",
@@ -372,7 +367,6 @@ INDICATOR_META = {
         },
     },
 
-    # 4) LIQUIDITY / PLUMBING
     "fed_balance_sheet": {
         "label": "Fed Balance Sheet (WALCL)",
         "unit": "bn USD",
@@ -404,7 +398,6 @@ INDICATOR_META = {
         },
     },
 
-    # 5) STRUCTURAL: DEBT & FISCAL / POLICY LINK
     "interest_payments": {
         "label": "US Federal Interest Payments (Quarterly)",
         "unit": "bn USD",
@@ -481,11 +474,10 @@ INDICATOR_META = {
         },
     },
 
-    # 6) STRUCTURAL: EXTERNAL BALANCE
     "current_account_gdp": {
         "label": "US Current Account Balance (% of GDP)",
         "unit": "%",
-        "direction": +1,  # less negative is "better"
+        "direction": +1,
         "source": "FRED USAB6BLTT02STSAQ",
         "scale": 1.0,
         "ref_line": 0.0,
@@ -498,7 +490,6 @@ INDICATOR_META = {
         },
     },
 
-    # 7) GOLD (STRUCTURAL / POLICY HEDGE)
     "gold": {
         "label": "Gold (GLD)",
         "unit": "",
@@ -516,7 +507,6 @@ INDICATOR_META = {
     },
 }
 
-# Blocks (thermometers vs constraints)
 BLOCKS = {
     "price_of_time": {
         "name": "1) Price of Time",
@@ -562,7 +552,7 @@ BLOCKS = {
     },
     "gold_block": {
         "name": "7) Gold",
-        "weight": 0.00,  # informational; do not weight global by default
+        "weight": 0.00,
         "indicators": ["gold"],
         "desc": "Policy / tail-risk hedge demand confirmation.",
         "group": "Structural Constraints",
@@ -635,7 +625,6 @@ def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
         out[t] = fetch_yf_one(t, start_date)
     return out
 
-
 # ============================================================
 # SCORING (z5y vs pct20y)
 # ============================================================
@@ -648,10 +637,6 @@ def rolling_percentile_last(hist: pd.Series, latest: float) -> float:
 
 
 def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str = "z5y"):
-    """
-    Returns: (score_0_100, signal, latest)
-      - signal: z-score for z5y, or mapped percentile for pct20y (in [-2,+2] space before direction)
-    """
     if series is None or series.empty:
         return np.nan, np.nan, np.nan
     s = series.dropna()
@@ -666,8 +651,8 @@ def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str
         hist = s[s.index >= start]
         if len(hist) < 20:
             hist = s
-        p = rolling_percentile_last(hist, latest)  # 0..1
-        sig = (p - 0.5) * 4.0  # 0->-2, 0.5->0, 1->+2
+        p = rolling_percentile_last(hist, latest)
+        sig = (p - 0.5) * 4.0
     else:
         start = end - DateOffset(years=5)
         hist = s[s.index >= start]
@@ -703,14 +688,24 @@ def status_label(status: str) -> str:
     return "n/a"
 
 
+def semaphore(status: str) -> str:
+    if status == "risk_on":
+        return "🟢"
+    if status == "neutral":
+        return "🟡"
+    if status == "risk_off":
+        return "🔴"
+    return "⚪"
+
+
 def pill_html(status: str) -> str:
     if status == "risk_on":
-        return "<span class='pill good'><span class='dot' style='background:var(--good)'></span>Risk-on</span>"
+        return "<span class='pill good'><span class='dot' style='background:var(--good)'></span>🟢 Risk-on</span>"
     if status == "risk_off":
-        return "<span class='pill bad'><span class='dot' style='background:var(--bad)'></span>Risk-off</span>"
+        return "<span class='pill bad'><span class='dot' style='background:var(--bad)'></span>🔴 Risk-off</span>"
     if status == "neutral":
-        return "<span class='pill warn'><span class='dot' style='background:var(--warn)'></span>Neutral</span>"
-    return "<span class='pill'><span class='dot' style='background:rgba(255,255,255,0.5)'></span>n/a</span>"
+        return "<span class='pill warn'><span class='dot' style='background:var(--warn)'></span>🟡 Neutral</span>"
+    return "<span class='pill'><span class='dot' style='background:rgba(255,255,255,0.5)'></span>⚪ n/a</span>"
 
 
 def fmt_value(val, unit: str, scale: float = 1.0):
@@ -732,7 +727,6 @@ def fmt_value(val, unit: str, scale: float = 1.0):
 
 
 def infer_frequency_days(s: pd.Series) -> float:
-    """Rough median spacing (days) to decide trend window."""
     if s is None or s.dropna().shape[0] < 10:
         return 1.0
     idx = pd.to_datetime(s.dropna().index)
@@ -761,16 +755,10 @@ def pct_change_over_days(series: pd.Series, days: int) -> float:
 
 
 def recent_trend(series: pd.Series) -> dict:
-    """
-    Returns dict with:
-      - window_label (e.g., "30d" or "1Q")
-      - delta_pct
-      - arrow
-    """
     if series is None or series.dropna().shape[0] < 10:
         return {"window_label": "n/a", "delta_pct": np.nan, "arrow": "→"}
     freq = infer_frequency_days(series)
-    if freq >= 20:  # monthly/quarterly-ish
+    if freq >= 20:
         days = 90
         label = "1Q"
     else:
@@ -784,11 +772,7 @@ def recent_trend(series: pd.Series) -> dict:
 
 
 def score_bar_html(score: float) -> str:
-    if np.isnan(score):
-        pos = 50
-    else:
-        pos = int(np.clip(score, 0, 100))
-    # marker left in %
+    pos = 50 if np.isnan(score) else int(np.clip(score, 0, 100))
     return f"""
       <div class="barWrap">
         <div class="barFill"></div>
@@ -796,9 +780,8 @@ def score_bar_html(score: float) -> str:
       </div>
     """
 
-
 # ============================================================
-# PLOTTING (DEEP DIVE) — readable titles (white) inside plot
+# PLOTTING (DEEP DIVE)
 # ============================================================
 
 def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 320):
@@ -817,7 +800,6 @@ def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 320
     if ref_line is not None:
         fig.add_hline(y=float(ref_line), line_width=1, line_dash="dot", opacity=0.7)
 
-    # Title inside top-left (annotation)
     fig.add_annotation(
         xref="paper", yref="paper",
         x=0.01, y=0.98,
@@ -840,32 +822,21 @@ def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 320
     )
     return fig
 
-
 # ============================================================
 # OPERATING LINES (ETF ORIENTED)
 # ============================================================
 
 def operating_lines(block_scores: dict, indicator_scores: dict):
-    """
-    4 decision-friendly lines:
-    - Equity
-    - Duration
-    - Credit
-    - Hedges
-    """
     gs = block_scores.get("GLOBAL", {}).get("score", np.nan)
 
     def _sg(x):
-        if np.isnan(x):
-            return 0.0
-        return float(x)
+        return 0.0 if np.isnan(x) else float(x)
 
     cond = _sg(block_scores.get("conditions", {}).get("score", np.nan))
     macro = _sg(block_scores.get("macro", {}).get("score", np.nan))
     pot = _sg(block_scores.get("price_of_time", {}).get("score", np.nan))
     policy = _sg(block_scores.get("policy_link", {}).get("score", np.nan))
 
-    # Equity
     if not np.isnan(gs):
         if gs >= 60 and cond >= 55:
             equity = "Increase (measured) — risk budget OK, watch credit"
@@ -876,7 +847,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         equity = "n/a"
 
-    # Duration
     termp = _sg(indicator_scores.get("term_premium_10y", {}).get("score", np.nan))
     infl = _sg(indicator_scores.get("cpi_yoy", {}).get("score", np.nan))
 
@@ -887,7 +857,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         duration = "Neutral — balance term-premium risk vs cycle"
 
-    # Credit
     hy = _sg(indicator_scores.get("hy_oas", {}).get("score", np.nan))
     hyg = _sg(indicator_scores.get("hyg_lqd_ratio", {}).get("score", np.nan))
     ds = _sg(indicator_scores.get("interest_to_receipts", {}).get("score", np.nan))
@@ -899,7 +868,6 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
     else:
         credit = "Neutral — quality + selectivity"
 
-    # Hedges
     usd = _sg(indicator_scores.get("usd_index", {}).get("score", np.nan))
     gold = _sg(indicator_scores.get("gold", {}).get("score", np.nan))
 
@@ -914,18 +882,37 @@ def operating_lines(block_scores: dict, indicator_scores: dict):
 
     return equity, duration, credit, hedges
 
-
 # ============================================================
-# WALLBOARD TILE (NO CHARTS) + EXPLAINER
+# WALLBOARD HTML (render grids in ONE markdown call per group)
 # ============================================================
 
-def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
+def wb_tile_html(key: str, series: pd.Series | None, indicator_scores: dict) -> str:
     meta = INDICATOR_META[key]
     sc = indicator_scores.get(key, {})
     score = sc.get("score", np.nan)
     status = sc.get("status", "n/a")
     latest = sc.get("latest", np.nan)
     latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
+
+    if series is None or series.empty:
+        return f"""
+        <div class="wbTile" style="opacity:0.88;">
+          <div>
+            <div class="wbName">{meta["label"]}</div>
+            <div class="wbMeta">{meta["source"]}</div>
+            <div class="wbRow">
+              <div class="wbVal">Missing</div>
+              <div>{pill_html("n/a")}</div>
+            </div>
+            <div class="wbSmall" style="margin-top:10px;">
+              No data available for this series in the selected history window.
+            </div>
+            <div class="wbSmall" style="margin-top:8px;">
+              Reference: <b>{"—" if meta.get("ref_line", None) is None else str(meta.get("ref_line"))}</b> · {meta["expander"].get("reference","—")}
+            </div>
+          </div>
+        </div>
+        """
 
     tr = recent_trend(series)
     wlab = tr["window_label"]
@@ -935,50 +922,58 @@ def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
 
     ref_line = meta.get("ref_line", None)
     ref_txt = "—" if ref_line is None else str(ref_line)
-
-    # “What is good?”: use the expander reference string (keeps consistent with your framework)
     ref_note = meta["expander"].get("reference", "—")
 
-    st.markdown(
-        f"""
-        <div class="wbTile">
-          <div>
-            <div class="wbName">{meta["label"]}</div>
-            <div class="wbMeta">{meta["source"]}</div>
+    return f"""
+    <div class="wbTile">
+      <div>
+        <div class="wbName">{meta["label"]}</div>
+        <div class="wbMeta">{meta["source"]}</div>
 
-            <div class="wbRow">
-              <div class="wbVal">{latest_txt}</div>
-              <div>{pill_html(status)}</div>
-            </div>
+        <div class="wbRow">
+          <div class="wbVal">{latest_txt}</div>
+          <div>{pill_html(status)}</div>
+        </div>
 
-            <div style="margin-top:10px;">
-              {score_bar_html(score)}
-              <div class="wbFoot">
-                <div class="wbSmall">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></div>
-                <div class="wbSmall">Trend ({wlab}): <b>{arrow} {d_txt}</b></div>
-              </div>
-            </div>
-
-            <div class="wbSmall" style="margin-top:8px;">
-              Reference: <b>{ref_txt}</b> · {ref_note}
-            </div>
+        <div style="margin-top:10px;">
+          {score_bar_html(score)}
+          <div class="wbFoot">
+            <div class="wbSmall">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></div>
+            <div class="wbSmall">Trend ({wlab}): <b>{arrow} {d_txt}</b></div>
           </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
-    with st.expander(f"Indicator guide — {meta['label']}", expanded=False):
-        exp = meta["expander"]
-        st.markdown(f"**What it is:** {exp.get('what','')}")
-        st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
-        st.markdown("**How to read it:**")
-        st.markdown(exp.get("interpretation", ""))
-        st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
+        <div class="wbSmall" style="margin-top:8px;">
+          Reference: <b>{ref_txt}</b> · {ref_note}
+        </div>
+      </div>
+    </div>
+    """
 
+
+def render_wallboard_group(title: str, desc: str, keys: list[str], indicators: dict, indicator_scores: dict):
+    tiles = []
+    for k in keys:
+        s = indicators.get(k, pd.Series(dtype=float))
+        tiles.append(wb_tile_html(k, s, indicator_scores))
+
+    html = f"""
+    <div class="section">
+      <div class="sectionHead">
+        <div>
+          <div class="sectionTitle">{title}</div>
+          <div class="sectionDesc">{desc}</div>
+        </div>
+      </div>
+      <div class="wbGrid">
+        {''.join(tiles)}
+      </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 # ============================================================
-# REPORT PROMPT (ENHANCED) — single copy/paste with payload
+# REPORT PROMPT — MUST be embedded exactly (verbatim)
 # ============================================================
 
 REPORT_PROMPT = """SYSTEM / ROLE
@@ -991,99 +986,156 @@ You are receiving a YAML payload containing updated macro-financial indicators (
 
 CRITICAL OUTPUT RULES (NON-NEGOTIABLE)
 
-- You must reproduce the exact report structure and section order specified below.
-- No section may be omitted, merged, or reordered, even if indicators are unchanged.
-- Do not speculate beyond the data provided.
-- Do not introduce new indicators or concepts not already in the framework.
-- Writing must be concrete, cautious, implementation-oriented, internally consistent across time.
-- Each analytical block must include:
-  - a short “What it captures” explanation (if specified),
-  - a one-liner,
-  - KPI-level implications.
+You must reproduce the exact report structure and section order specified below.
+
+No section may be omitted, merged, or reordered, even if indicators are unchanged.
+
+Do not speculate beyond the data provided.
+
+Do not introduce new indicators or concepts not already in the framework.
+
+Writing must be:
+
+concrete,
+
+cautious,
+
+implementation-oriented,
+
+internally consistent across time.
+
+Each analytical block must include:
+
+a short “What it captures” explanation (if specified),
+
+a one-liner,
+
+KPI-level implications.
 
 TASKS
 
 Using the YAML payload:
 
-1) Reconstruct the macro regime
-   - Explicitly separate:
-     - Market Thermometers (fast, reflexive indicators)
-     - Structural Constraints (slow, compounding pressures)
-   - Assign an implicit regime tone (Risk-On / Neutral / Risk-Off) by behavior, not direction.
+1. Reconstruct the macro regime
 
-2) Assess structural regime risk
-   - Evaluate whether conditions point toward:
-     - fiscal dominance,
-     - financial repression,
-     - inflation-tolerant policy,
-     - or continued late-cycle equilibrium.
-   - Do not call crises unless directly implied by constraints.
+Explicitly separate:
 
-3) Translate the regime into portfolio logic
-   - Produce an ETF-oriented action note:
-     - Equity exposure
-     - Duration (nominal vs TIPS)
-     - Credit (IG vs HY)
-     - Hedges (USD, gold, cash)
-   - Emphasize asymmetry, risk budgeting, and optionality.
+Market Thermometers (fast, reflexive indicators)
 
-4) Define short-horizon triggers
-   - Provide 3–5 heuristic triggers (2–6 week horizon).
-   - Triggers must be:
-     - observable,
-     - threshold-based,
-     - directly linked to regime change or de-risking.
+Structural Constraints (slow, compounding pressures)
+
+Assign an implicit regime tone (Risk-On / Neutral / Risk-Off) by behavior, not direction.
+
+2. Assess structural regime risk
+
+Evaluate whether conditions point toward:
+
+fiscal dominance,
+
+financial repression,
+
+inflation-tolerant policy,
+
+or continued late-cycle equilibrium.
+
+Do not call crises unless directly implied by constraints.
+
+3. Translate the regime into portfolio logic
+
+Produce an ETF-oriented action note:
+
+Equity exposure
+
+Duration (nominal vs TIPS)
+
+Credit (IG vs HY)
+
+Hedges (USD, gold, cash)
+
+Emphasize asymmetry, risk budgeting, and optionality.
+
+4. Define short-horizon triggers
+
+Provide 3–5 heuristic triggers (2–6 week horizon).
+
+Triggers must be:
+
+observable,
+
+threshold-based,
+
+directly linked to regime change or de-risking.
 
 MANDATORY REPORT STRUCTURE (FOLLOW EXACTLY)
 
+You must generate the report using this exact structure and headings:
+
 # Global Macro Regime Report
+
 ## Dalio-Enhanced, Multi-Asset View — Internal PM Edition
+
 [Insert current date]
 
 How to Read This Report: What “Risk-On / Neutral / Risk-Off” Really Means
+
 (Define regimes as behavioral pricing regimes, not forecasts.)
 
 Executive Summary
+
 (Single coherent narrative of the regime, tensions, and positioning.)
 
 Context Overview: How This Framework Works
+
 (Market Thermometers vs Structural Constraints.)
 
 Reconstructing the Regime
 Market Thermometers
-1) Price of Time
+
+1. Price of Time
+
 1A) Real & Nominal Rates
+
 1B) Yield Curve
 
-2) Macro Cycle
+2. Macro Cycle
+
 2A) Inflation, Breakevens & Labor
 
-3) Conditions and Stress
+3. Conditions and Stress
+
 3A) Financial Conditions & Risk Appetite
 
-4) Liquidity Plumbing
+4. Liquidity Plumbing
+
 4A) Liquidity Plumbing
 
 Structural Constraints
 5) Debt & Fiscal
+
 5A) Debt Service & Fiscal Dynamics
 
-6) External Balance
-7) Gold
+6. External Balance
+7. Gold
+   Structural Regime Shift
 
-Structural Regime Shift
 (Probability, path, and logic — no speculation.)
 
 ETF-Oriented Action Note
+
 Equity Exposure
+
 Duration
+
 Credit Risk
+
 Hedges
 
 Key Triggers
+
 (3–5 near-term triggers.)
 
 Final Bottom Line
+
 (One paragraph, no bullets.)
 
 Appendix: Portfolio Translation & Regime Playbook (Internal)
@@ -1094,25 +1146,32 @@ D. Regime Transition Map
 E. Trigger Matrix
 F. Meta-Rules
 G. One-Page CIO Takeaway
-
 TONE GUIDANCE
 
 Write as if the reader:
-- runs real money,
-- hates fluff,
-- cares about downside more than upside.
+
+runs real money,
+
+hates fluff,
+
+cares about downside more than upside.
 
 Prefer:
-- clear causal language,
-- short declarative sentences,
-- disciplined repetition of core ideas.
+
+clear causal language,
+
+short declarative sentences,
+
+disciplined repetition of core ideas.
 
 Avoid:
-- dramatic language,
-- forecasts,
-- narrative speculation.
-""".strip()
 
+dramatic language,
+
+forecasts,
+
+narrative speculation.
+""".strip()
 
 # ============================================================
 # MAIN
@@ -1267,7 +1326,6 @@ def main():
         bscore = float(np.mean(vals)) if vals else np.nan
         block_scores[bkey] = {"score": bscore, "status": classify_status(bscore)}
 
-        # only weight blocks with positive weight
         if binfo["weight"] > 0 and not np.isnan(bscore):
             global_score += bscore * binfo["weight"]
             w_used += binfo["weight"]
@@ -1277,10 +1335,7 @@ def main():
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
 
     # Data freshness
-    latest_points = []
-    for s in indicators.values():
-        if s is not None and not s.empty:
-            latest_points.append(s.index.max())
+    latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
     data_max_date = max(latest_points) if latest_points else None
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -1297,22 +1352,25 @@ def main():
     # OVERVIEW — immediate tiles + scoring legend + operating lines
     # ============================================================
     with tabs[0]:
-        st.markdown("<div class='muted'>A macro-finance wallboard that separates fast market thermometers from slower structural constraints, then translates the regime into ETF-oriented operating lines.</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='muted'>ETF-oriented macro wallboard: separates fast market thermometers from slower structural constraints, then translates regime into operating lines.</div>",
+            unsafe_allow_html=True
+        )
 
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
-        # block summaries (order: name -> regime -> score)
         def block_line(bkey):
             name = BLOCKS[bkey]["name"]
             sc = block_scores[bkey]["score"]
             stt = block_scores[bkey]["status"]
             sc_txt = "n/a" if np.isnan(sc) else f"{sc:.1f}"
-            return f"{name}: <b>{status_label(stt)}</b> ({sc_txt})"
+            return f"{semaphore(stt)} {name}: <b>{status_label(stt)}</b> ({sc_txt})"
 
         market_blocks = ["price_of_time", "macro", "conditions", "plumbing"]
         structural_blocks = ["policy_link", "external", "gold_block"]
 
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
+
         st.markdown(
             f"""
             <div class="grid3">
@@ -1320,6 +1378,7 @@ def main():
                 <div class="cardTitle">Global Score (0–100) — core blocks</div>
                 <div class="cardValue">{gs_txt}</div>
                 <div class="cardSub">{pill_html(global_status)}</div>
+                <div class="cardSub">{score_bar_html(global_score)}</div>
                 <div class="cardSub">
                   <b>Equity:</b> {eq_line}<br/>
                   <b>Duration:</b> {dur_line}<br/>
@@ -1340,12 +1399,12 @@ def main():
               </div>
 
               <div class="card">
-                <div class="cardTitle">Funding / policy links (one-liners)</div>
+                <div class="cardTitle">Policy / funding links (one-liners)</div>
                 <div class="cardSub">
                   1) <b>Deficit pressure ↑ → supply pressure ↑ → term premium risk ↑</b><br/>
                   2) <b>Debt service pressure ↑ → policy flexibility ↓</b><br/>
                   3) <b>Term premium ↑ + USD ↑ → global tightening impulse</b><br/>
-                  4) <b>External deficit → higher vulnerability in USD tightening</b><br/>
+                  4) <b>External deficit → vulnerability in USD tightening</b><br/>
                   5) <b>Gold strength often reflects hedge demand, not growth optimism</b>
                 </div>
               </div>
@@ -1385,15 +1444,21 @@ def main():
             )
 
     # ============================================================
-    # WALLBOARD — no charts in tiles; show metric + regime + score + ref + trend + expander
+    # WALLBOARD — fixed rendering + clean grid + optional guides
     # ============================================================
     with tabs[1]:
         st.markdown("## Wallboard")
-        st.markdown("<div class='muted'>First: overall regime. Second: component scores. Third: operating lines. Then: grouped indicator tiles with guidance.</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='muted'>Order of comprehension: 1) Overall regime  2) Component scores  3) Operating lines  4) Grouped indicator tiles.</div>",
+            unsafe_allow_html=True
+        )
+
+        show_guides = st.toggle("Show indicator guides (definitions/thresholds)", value=False)
 
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
-
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
+
+        # 1) Overall regime
         st.markdown(
             f"""
             <div class="grid2">
@@ -1404,12 +1469,11 @@ def main():
                 <div class="cardSub">{score_bar_html(global_score)}</div>
               </div>
               <div class="card">
-                <div class="cardTitle">Operating lines (ETF)</div>
+                <div class="cardTitle">Quick read</div>
                 <div class="cardSub">
-                  <b>Equity:</b> {eq_line}<br/>
-                  <b>Duration:</b> {dur_line}<br/>
-                  <b>Credit:</b> {cr_line}<br/>
-                  <b>Hedges:</b> {hdg_line}
+                  <b>Signal:</b> {semaphore(global_status)} {status_label(global_status)}<br/>
+                  <b>Score:</b> {gs_txt} / 100<br/>
+                  <b>Latest datapoint:</b> {('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}
                 </div>
               </div>
             </div>
@@ -1417,14 +1481,14 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Component scores
+        # 2) Component scores
         def comp_row(keys):
             rows = []
             for k in keys:
                 sc = block_scores[k]["score"]
                 stt = block_scores[k]["status"]
                 sc_txt = "n/a" if np.isnan(sc) else f"{sc:.1f}"
-                rows.append(f"{BLOCKS[k]['name']}: <b>{status_label(stt)}</b> ({sc_txt})")
+                rows.append(f"{semaphore(stt)} {BLOCKS[k]['name']}: <b>{status_label(stt)}</b> ({sc_txt})")
             return "<br/>".join(rows)
 
         st.markdown(
@@ -1443,94 +1507,83 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Grouped indicator tiles
-        def render_group(title: str, desc: str, keys: list[str]):
-            st.markdown(
-                f"""
-                <div class="section">
-                  <div class="sectionHead">
-                    <div>
-                      <div class="sectionTitle">{title}</div>
-                      <div class="sectionDesc">{desc}</div>
-                    </div>
-                  </div>
-                """,
-                unsafe_allow_html=True
-            )
-            st.markdown("<div class='wbGrid'>", unsafe_allow_html=True)
-            for k in keys:
-                s = indicators.get(k, pd.Series(dtype=float))
-                if s is None or s.empty:
-                    # keep layout consistent: show tile with missing note
-                    meta = INDICATOR_META[k]
-                    st.markdown(
-                        f"""
-                        <div class="wbTile" style="opacity:0.85;">
-                          <div>
-                            <div class="wbName">{meta["label"]}</div>
-                            <div class="wbMeta">{meta["source"]}</div>
-                            <div class="wbRow">
-                              <div class="wbVal">Missing</div>
-                              <div>{pill_html("n/a")}</div>
-                            </div>
-                            <div class="wbSmall" style="margin-top:10px;">
-                              No data available for this series in the selected history window.
-                            </div>
-                          </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    with st.expander(f"Indicator guide — {meta['label']}", expanded=False):
-                        exp = meta["expander"]
-                        st.markdown(f"**What it is:** {exp.get('what','')}")
-                        st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
-                        st.markdown("**How to read it:**")
-                        st.markdown(exp.get("interpretation", ""))
-                        st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
-                else:
-                    wallboard_tile(k, s, indicator_scores)
-            st.markdown("</div></div>", unsafe_allow_html=True)
+        # 3) Operating lines
+        st.markdown(
+            f"""
+            <div class="card" style="margin-top:14px;">
+              <div class="cardTitle">Operating lines (ETF)</div>
+              <div class="cardSub">
+                <b>Equity:</b> {eq_line}<br/>
+                <b>Duration:</b> {dur_line}<br/>
+                <b>Credit:</b> {cr_line}<br/>
+                <b>Hedges:</b> {hdg_line}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        render_group(
+        # 4) Grouped indicator tiles (rendered safely as one grid per group)
+        render_wallboard_group(
             "Price of Time",
             "Rates and curve: the price of time and late-cycle signal.",
-            ["real_10y", "nominal_10y", "yield_curve_10_2"]
+            ["real_10y", "nominal_10y", "yield_curve_10_2"],
+            indicators, indicator_scores
         )
-        render_group(
+        render_wallboard_group(
             "Macro Cycle",
             "Inflation and growth: policy constraint and cycle pressure.",
-            ["breakeven_10y", "cpi_yoy", "unemployment_rate"]
+            ["breakeven_10y", "cpi_yoy", "unemployment_rate"],
+            indicators, indicator_scores
         )
-        render_group(
+        render_wallboard_group(
             "Conditions & Stress",
             "Fast regime: USD, credit stress, vol, trend, risk appetite.",
-            ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]
+            ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"],
+            indicators, indicator_scores
         )
-        render_group(
+        render_wallboard_group(
             "Liquidity / Plumbing",
             "System liquidity: tailwind vs drain for risk assets.",
-            ["fed_balance_sheet", "rrp"]
+            ["fed_balance_sheet", "rrp"],
+            indicators, indicator_scores
         )
-        render_group(
+        render_wallboard_group(
             "Fiscal / Policy Constraint",
             "Debt service, deficit dynamics, and funding constraint signal.",
-            ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]
+            ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"],
+            indicators, indicator_scores
         )
-        render_group(
+        render_wallboard_group(
             "External Balance & Gold",
             "External funding reliance + hedge demand confirmation.",
-            ["current_account_gdp", "gold"]
+            ["current_account_gdp", "gold"],
+            indicators, indicator_scores
         )
 
+        # Guides rendered separately so they don't break wallboard grid
+        if show_guides:
+            st.markdown("### Indicator guides")
+            st.markdown("<div class='muted'>Definitions, reference levels, and policy/funding links. These are kept out of the tile grid so the wallboard stays clean.</div>", unsafe_allow_html=True)
+            for k, meta in INDICATOR_META.items():
+                exp = meta["expander"]
+                with st.expander(f"Guide — {meta['label']}", expanded=False):
+                    st.markdown(f"**What it is:** {exp.get('what','')}")
+                    st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
+                    st.markdown("**How to read it:**")
+                    st.markdown(exp.get("interpretation", ""))
+                    st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
+
     # ============================================================
-    # DEEP DIVE — consistent; charts + expander text
+    # DEEP DIVE — charts + expander text
     # ============================================================
     with tabs[2]:
         st.markdown("## Deep dive")
-        st.markdown("<div class='muted'>Full charts with consistent styling. Titles are embedded inside charts (top-left) for readability on dark background.</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='muted'>Charts with consistent dark styling. Titles are embedded inside charts (top-left) for readability.</div>",
+            unsafe_allow_html=True
+        )
 
-        # Choose group to focus
         group = st.selectbox(
             "Select section",
             ["Price of Time", "Macro Cycle", "Conditions & Stress", "Liquidity / Plumbing", "Fiscal / Policy Constraint", "External Balance & Gold"],
@@ -1546,13 +1599,12 @@ def main():
             "External Balance & Gold": ["current_account_gdp", "gold"],
         }
 
-        keys = group_map[group]
-        for k in keys:
+        for k in group_map[group]:
             meta = INDICATOR_META[k]
             s = indicators.get(k, pd.Series(dtype=float))
+
             st.markdown("<div class='section'>", unsafe_allow_html=True)
 
-            # header row
             sc = indicator_scores.get(k, {})
             score = sc.get("score", np.nan)
             status = sc.get("status", "n/a")
@@ -1602,13 +1654,12 @@ def main():
             st.markdown("</div>", unsafe_allow_html=True)
 
     # ============================================================
-    # WHAT CHANGED — readable + “what’s significant” view
+    # WHAT CHANGED — readable + watchlist
     # ============================================================
     with tabs[3]:
         st.markdown("## What changed")
         st.markdown(
-            "<div class='muted'>Use this to spot what is *moving meaningfully* (trend) and what is *close to regime thresholds* (score). "
-            "The watchlist highlights items that may matter over the next 2–6 weeks.</div>",
+            "<div class='muted'>Watchlist highlights indicators that are moving meaningfully and/or are close to regime thresholds. Use it to prioritize what matters over the next 2–6 weeks.</div>",
             unsafe_allow_html=True
         )
 
@@ -1618,7 +1669,6 @@ def main():
             if s is None or s.empty:
                 continue
 
-            # Trend window depends on frequency
             tr = recent_trend(s)
             window = tr["window_label"]
             dwin = tr["delta_pct"]
@@ -1633,22 +1683,18 @@ def main():
             status = sc.get("status", "n/a")
             mode = meta.get("scoring_mode", "z5y")
 
-            # “Attention score”: combine (a) proximity to thresholds, (b) magnitude of recent move
-            # - proximity: distance to 40/60 boundaries
             if np.isnan(score):
                 prox = 0.0
             else:
-                prox = max(0.0, 20.0 - min(abs(score - 40), abs(score - 60))) / 20.0  # 0..1
-            move = 0.0 if np.isnan(dwin) else min(1.0, abs(dwin) / 10.0)  # 10% ~ max attention
+                prox = max(0.0, 20.0 - min(abs(score - 40), abs(score - 60))) / 20.0
+            move = 0.0 if np.isnan(dwin) else min(1.0, abs(dwin) / 10.0)
             attention = 0.55 * prox + 0.45 * move
-
             watch = "WATCH" if attention >= 0.55 else ""
 
             rows.append({
-                "Key": key,
                 "Indicator": meta["label"],
                 "Scoring": mode,
-                "Regime": status_label(status),
+                "Regime": f"{semaphore(status)} {status_label(status)}",
                 "Score": (np.nan if np.isnan(score) else round(score, 1)),
                 f"Trend ({window}) %": (np.nan if np.isnan(dwin) else round(dwin, 2)),
                 "Δ 7d %": (np.nan if np.isnan(d7) else round(d7, 2)),
@@ -1664,23 +1710,26 @@ def main():
         else:
             df = pd.DataFrame(rows).sort_values(["Watchlist", "Attention"], ascending=[True, False])
 
-            # Watchlist summary
             wl = df[df["Watchlist"] == "WATCH"].sort_values("Attention", ascending=False).head(8)
             if not wl.empty:
-                st.markdown("### Watchlist (most relevant movers / threshold proximity)")
+                st.markdown("### Watchlist (priority movers / threshold proximity)")
                 for _, r in wl.iterrows():
+                    trend_col = [c for c in df.columns if c.startswith("Trend")][0]
                     st.markdown(
-                        f"<div class='card' style='margin-bottom:10px;'>"
-                        f"<div class='cardTitle'>{r['Indicator']}</div>"
-                        f"<div class='cardSub'>Regime: <b>{r['Regime']}</b> · Score: <b>{r['Score']}</b> · "
-                        f"{[c for c in df.columns if c.startswith('Trend')][0]}: <b>{r[[c for c in df.columns if c.startswith('Trend')][0]]:+.2f}%</b></div>"
-                        f"</div>",
+                        f"""
+                        <div class='card' style='margin-bottom:10px;'>
+                          <div class='cardTitle'>{r['Indicator']}</div>
+                          <div class='cardSub'>
+                            Regime: <b>{r['Regime']}</b> · Score: <b>{r['Score']}</b> · {trend_col}: <b>{(0.0 if pd.isna(r[trend_col]) else r[trend_col]):+.2f}%</b>
+                          </div>
+                        </div>
+                        """,
                         unsafe_allow_html=True
                     )
 
             st.markdown("### Full table")
             st.dataframe(
-                df.drop(columns=["Key"]).reset_index(drop=True),
+                df.reset_index(drop=True),
                 use_container_width=True,
                 column_config={
                     "Indicator": st.column_config.TextColumn(
@@ -1694,7 +1743,7 @@ def main():
                     ),
                     "Regime": st.column_config.TextColumn(
                         "Regime",
-                        help="Behavioral regime label derived from the 0–100 score: Risk-on (>60), Neutral (40–60), Risk-off (<40)."
+                        help="Behavioral regime label derived from the 0–100 score."
                     ),
                     "Score": st.column_config.NumberColumn(
                         "Score",
@@ -1712,8 +1761,8 @@ def main():
             )
 
             st.caption(
-                "Note: % changes are computed on the closest available past observation (series frequency differs). "
-                "Use Wallboard for reference levels and the Deep dive for context."
+                "Note: % changes use the closest available past observation (series frequency differs). "
+                "Use Wallboard for reference levels and Deep dive for chart context."
             )
 
     # ============================================================
@@ -1721,12 +1770,14 @@ def main():
     # ============================================================
     with tabs[4]:
         st.markdown("## Report generation")
-        st.markdown("<div class='muted'>Single copy/paste output: prompt first, then payload. Use it in another chat to generate the PM/CIO report.</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='muted'>Single copy/paste output: prompt first, then YAML payload. Paste into a new chat to generate the PM/CIO report.</div>",
+            unsafe_allow_html=True
+        )
 
         generate = st.button("Generate one-shot prompt + payload")
 
         if generate:
-            # Build YAML payload (compact, consistent)
             payload_lines = []
             payload_lines.append("macro_regime_payload:")
             payload_lines.append(f"  generated_at_utc: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -1788,8 +1839,7 @@ def main():
             )
 
             st.code(one_shot, language="markdown")
-
-            st.caption("Tip: paste the entire block into a new chat. The model should first follow the prompt, then read the YAML payload.")
+            st.caption("Tip: paste the entire block into a new chat. The model should follow the prompt, then read the YAML payload.")
 
 if __name__ == "__main__":
     main()
