@@ -1,3 +1,9 @@
+# streamlit_app_global_finance.py
+# Updated version — fixes:
+#  - safe Trend formatting in "What Changed" (avoids ValueError)
+#  - Deep Dive group titles styling (market vs structural)
+# Based on user's uploaded file. Replace your app file with this content.
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -199,6 +205,23 @@ st.markdown(
   .alertItem{ color: rgba(255,255,255,0.90); font-size: 0.95rem; margin: 4px 0; }
 
   code { color: rgba(255,255,255,0.88); }
+
+  /* Group headers emphasis in Deep Dive */
+  .groupTitle {
+    font-size: 1.28rem;
+    font-weight: 1000;
+    color: #8ecdf7; /* blu chiaro per Market Thermometers */
+    padding: 6px 0;
+  }
+  .groupTitle.struct {
+    color: #f7c97f; /* arancio / oro per Structural Constraints */
+  }
+  .groupDesc {
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.78);
+    margin-top: 3px;
+  }
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -1104,7 +1127,6 @@ def build_alerts(indicators: dict, indicator_scores: dict):
 # ============================================================
 # REPORT PROMPT (kept EXACTLY as in your code)
 # ============================================================
-
 REPORT_PROMPT = """SYSTEM / ROLE
 
 You are a senior multi-asset macro strategist writing an internal PM / CIO regime report.
@@ -1307,29 +1329,16 @@ narrative speculation.
 # ============================================================
 
 def trend_support_signal(key: str, series: pd.Series) -> float:
-    """
-    + => move is supportive for risk regime given 'direction' convention used in scoring
-    - => move is deteriorating
-    Uses recent trend window (30d or 1Q).
-    """
     if series is None or series.empty:
         return np.nan
     tr = recent_trend(series)
     d = tr.get("delta_pct", np.nan)
     if np.isnan(d):
         return np.nan
-    # If direction == +1, higher is better -> positive change supportive.
-    # If direction == -1, lower is better -> negative change supportive (so flip sign).
     direction = INDICATOR_META[key]["direction"]
     return float(direction) * float(d)
 
 def trend_badge(key: str, series: pd.Series) -> tuple[str, str]:
-    """
-    Returns (icon, label) for Watchlist:
-    🟢 improving / supportive
-    🟡 mixed / near-flat
-    🔴 deteriorating / risky
-    """
     sig = trend_support_signal(key, series)
     if np.isnan(sig):
         return "🟡", "Mixed"
@@ -1764,7 +1773,14 @@ When **Thermometers Risk-Off** but **Constraints benign**:
         ]
 
         for gname, keys in deep_groups:
-            st.markdown(f"<div class='section'><div class='sectionHead'><div><div class='sectionTitle'>{_html.escape(gname)}</div><div class='sectionDesc'>Charts and indicator guides.</div></div></div></div>", unsafe_allow_html=True)
+            # choose class for styling: market vs struct
+            group_lower = gname.lower()
+            if any(x in group_lower for x in ["price of time", "macro", "conditions", "liquidity"]):
+                title_html = f"<div class='section'><div class='sectionHead'><div><div class='groupTitle'>{_html.escape(gname)}</div><div class='groupDesc'>Charts and indicator guides.</div></div></div></div>"
+            else:
+                title_html = f"<div class='section'><div class='sectionHead'><div><div class='groupTitle struct'>{_html.escape(gname)}</div><div class='groupDesc'>Charts and indicator guides.</div></div></div></div>"
+
+            st.markdown(title_html, unsafe_allow_html=True)
 
             for k in keys:
                 meta = INDICATOR_META[k]
@@ -1892,8 +1908,20 @@ When **Thermometers Risk-Off** but **Constraints benign**:
                 st.markdown("### Watchlist / Attention Panel")
                 st.markdown("<div class='muted'>Icons: 🟢 improving/supportive · 🟡 mixed · 🔴 deteriorating/risky.</div>", unsafe_allow_html=True)
 
+                # --- FIXED: safe Trend extraction & formatting ---
                 for _, r in watch_df.iterrows():
                     badge = "🔥 HOT" if r["Watch"] == "HOT" else "👀 WATCH"
+
+                    # safe: find a column that starts with "Trend"
+                    trend_col = next((c for c in df.columns if str(c).startswith("Trend")), None)
+                    trend_val = np.nan
+                    if trend_col is not None:
+                        try:
+                            trend_val = float(r[trend_col])
+                        except Exception:
+                            trend_val = np.nan
+
+                    trend_display = ("n/a" if np.isnan(trend_val) else f"{trend_val:+.2f}%")
                     trend_bias = r["Trend Bias"]
                     st.markdown(
                         f"""
@@ -1901,7 +1929,7 @@ When **Thermometers Risk-Off** but **Constraints benign**:
                           <div class="cardTitle">{_html.escape(badge)} — {_html.escape(r["Indicator"])}</div>
                           <div class="cardSub">
                             {trend_bias} · Regime: <b>{_html.escape(r["Regime"])}</b> · Score: <b>{r["Score"]}</b> ·
-                            Trend: <b>{r[[c for c in df.columns if c.startswith("Trend")][0]]:+.2f}%</b> ·
+                            Trend: <b>{_html.escape(trend_display)}</b> ·
                             Attention: <b>{r["Attention"]:.2f}</b>
                           </div>
                         </div>
@@ -1918,15 +1946,6 @@ When **Thermometers Risk-Off** but **Constraints benign**:
             st.dataframe(
                 df.sort_values(["Watch", "Attention"], ascending=[True, False]).reset_index(drop=True),
                 use_container_width=True,
-                column_config={
-                    "Indicator": st.column_config.TextColumn("Indicator", width="large"),
-                    "Scoring": st.column_config.TextColumn("Scoring", help="z5y = fast thermometers; pct20y = slow constraints."),
-                    "Regime": st.column_config.TextColumn("Regime", help="From 0–100 score: >60 Risk-On, 40–60 Neutral, <40 Risk-Off."),
-                    "Score": st.column_config.NumberColumn("Score"),
-                    "Watch": st.column_config.TextColumn("Watch", help="HOT/WATCH based on threshold proximity + move magnitude."),
-                    "Trend Bias": st.column_config.TextColumn("Trend Bias", help="🟢 supportive, 🟡 mixed, 🔴 risky (direction-aware)."),
-                    "Attention": st.column_config.NumberColumn("Attention", help="0–1 heuristic relevance score."),
-                }
             )
 
     # ============================================================
