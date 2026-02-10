@@ -10,6 +10,24 @@ from datetime import datetime, timedelta, timezone
 from pandas.tseries.offsets import DateOffset
 
 # ============================================================
+# ALERT RULES (thresholds for What Changed / Watchlist panel)
+# These are intentionally simple and stable; tune if needed.
+# ============================================================
+ALERT_RULES = {
+    # "near boundary" means the indicator score is close to 40/60 cutoffs
+    "score_near_boundary": {"dist": 5},
+
+    # "extreme" readings for attention (not a forecast)
+    "score_extreme": {"low": 20, "high": 80},
+
+    # Trend thresholds for daily-like series (30d window, % move)
+    "trend_daily_pct": {"warn": 2.0, "crit": 5.0},
+
+    # Trend thresholds for slow series (quarter-ish window, % move)
+    "trend_slow_pct": {"warn": 1.0, "crit": 2.5},
+}
+
+# ============================================================
 # PAGE CONFIG
 # ============================================================
 st.set_page_config(
