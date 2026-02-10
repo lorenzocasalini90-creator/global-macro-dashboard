@@ -1000,8 +1000,77 @@ def render_tile(fragment_html: str, height: int = 210):
     components.html(doc, height=height, scrolling=False)
 
 
+def _wb_inline_pill(status: str) -> str:
+    status_l = (status or "").lower()
+    if "risk-on" in status_l or "on" == status_l:
+        color = "rgba(34,197,94,1)"
+        bg = "rgba(34,197,94,0.12)"
+        label = "Risk-on"
+    elif "neutral" in status_l:
+        color = "rgba(245,158,11,1)"
+        bg = "rgba(245,158,11,0.12)"
+        label = "Neutral"
+    else:
+        color = "rgba(239,68,68,1)"
+        bg = "rgba(239,68,68,0.12)"
+        label = "Risk-off"
+    return f"""
+    <span style="
+        display:inline-flex; align-items:center; gap:8px;
+        padding:6px 12px; border-radius:999px;
+        border:1px solid {color};
+        background:{bg};
+        color: rgba(255,255,255,0.92);
+        font-weight:800; font-size:0.88rem;
+        white-space:nowrap;
+    ">
+      <span style="width:10px;height:10px;border-radius:999px;background:{color};display:inline-block;"></span>
+      {label}
+    </span>
+    """
+
+def _wb_inline_score_bar(score: float) -> str:
+    # score is 0-100; NaN -> empty bar with marker centered
+    if score is None or (isinstance(score, float) and np.isnan(score)):
+        w = 0
+        marker = 50
+    else:
+        w = max(0, min(100, float(score)))
+        marker = w
+    return f"""
+    <div style="margin-top:10px;">
+      <div style="height:10px;border-radius:999px;background:rgba(255,255,255,0.14);position:relative;overflow:hidden;">
+        <div style="height:100%;width:{w}%;background:rgba(255,255,255,0.24);border-radius:999px;"></div>
+        <div style="position:absolute;left:{marker}%;top:-3px;width:3px;height:16px;background:rgba(255,255,255,0.82);border-radius:3px;"></div>
+      </div>
+    </div>
+    """
+
+def _wb_wrap_html(inner: str) -> str:
+    # Wrap tile HTML to make components.html stable and avoid scrollbars.
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body {{
+    margin: 0; padding: 0;
+    background: transparent;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  }}
+</style>
+</head>
+<body>
+{inner}
+</body>
+</html>"""
+
 def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
-    """Wallboard tile rendered with st.markdown (no iframe) so CSS grid/columns behave predictably."""
+    """
+    Wallboard tile rendered via components.html (iframe) to avoid Streamlit markdown
+    re-parsing HTML as code blocks. Uses inline styles (no dependency on global CSS).
+    """
     meta = INDICATOR_META[key]
     sc = indicator_scores.get(key, {})
     score = sc.get("score", np.nan)
@@ -1022,38 +1091,47 @@ def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
     ref_line = meta.get("ref_line", None)
     ref_txt = "—" if ref_line is None else str(ref_line)
     ref_txt = _esc(ref_txt)
-
     ref_note = _esc(meta["expander"].get("reference", "—"))
 
     score_txt = "n/a" if np.isnan(score) else f"{score:.0f}"
     score_txt = _esc(score_txt)
 
-    fragment = f"""
-    <div class="wbTile">
-      <div class="wbTop">
+    pill = _wb_inline_pill(status)
+    bar = _wb_inline_score_bar(score)
+
+    inner = f"""
+    <div style="
+        background: rgba(255,255,255,0.028);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 18px;
+        padding: 14px 14px 12px 14px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+        color: rgba(255,255,255,0.94);
+        min-height: 156px;
+    ">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <div class="wbName">{label}</div>
-          <div class="wbMeta">{source}</div>
+          <div style="font-weight:900;font-size:1.05rem;letter-spacing:-0.01em;">{label}</div>
+          <div style="font-size:0.85rem;color:rgba(255,255,255,0.62);margin-top:2px;">{source}</div>
         </div>
-        <div>{pill_html(status)}</div>
+        <div>{pill}</div>
       </div>
 
-      <div class="wbVal">{latest_txt}</div>
+      <div style="margin-top:10px;font-size:1.65rem;font-weight:900;letter-spacing:-0.01em;color:rgba(255,255,255,0.96);">{latest_txt}</div>
 
-      <div class="wbBarWrap">
-        {score_bar_html(score)}
-        <div class="wbFoot">
-          <div class="wbSmall">Score: <b>{score_txt}</b></div>
-          <div class="wbSmall">Trend ({wlab}): <b>{arrow} {d_txt}</b></div>
-        </div>
+      {bar}
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;">
+        <div style="font-size:0.88rem;color:rgba(255,255,255,0.70);">Score: <b style="color:rgba(255,255,255,0.92);">{score_txt}</b></div>
+        <div style="font-size:0.88rem;color:rgba(255,255,255,0.70);">Trend ({wlab}): <b style="color:rgba(255,255,255,0.92);">{arrow} {d_txt}</b></div>
       </div>
 
-      <div class="wbRef">
-        Reference: <b>{ref_txt}</b> · {_esc_truncate(ref_note, 90)}
+      <div style="font-size:0.88rem;color:rgba(255,255,255,0.70);margin-top:8px;line-height:1.25;">
+        Reference: <b style="color:rgba(255,255,255,0.92);">{ref_txt}</b> · {_esc_truncate(ref_note, 90)}
       </div>
     </div>
     """
-    st.markdown(textwrap.dedent(fragment).strip(), unsafe_allow_html=True)
+    components.html(_wb_wrap_html(inner), height=270, scrolling=False)
 
     with st.expander(f"Indicator guide — {meta['label']}", expanded=False):
         exp = meta["expander"]
@@ -1067,29 +1145,40 @@ def wallboard_missing_tile(key: str):
     meta = INDICATOR_META[key]
     label = _esc(meta["label"])
     source = _esc(meta["source"])
-    fragment = f"""
-    <div class="wbTile wbMissing">
-      <div class="wbTop">
+    pill = _wb_inline_pill("Neutral")
+    inner = f"""
+    <div style="
+        background: rgba(255,255,255,0.018);
+        border: 1px dashed rgba(255,255,255,0.14);
+        border-radius: 18px;
+        padding: 14px 14px 12px 14px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.16);
+        color: rgba(255,255,255,0.94);
+        min-height: 156px;
+    ">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <div class="wbName">{label}</div>
-          <div class="wbMeta">{source}</div>
+          <div style="font-weight:900;font-size:1.05rem;letter-spacing:-0.01em;">{label}</div>
+          <div style="font-size:0.85rem;color:rgba(255,255,255,0.62);margin-top:2px;">{source}</div>
         </div>
-        <div><span class="pill neutral"><span class="dot" style="background:var(--neutral)"></span>Missing</span></div>
+        <div>{pill}</div>
       </div>
-      <div class="wbVal">—</div>
-      <div class="wbBarWrap">
-        {score_bar_html(np.nan)}
-        <div class="wbFoot">
-          <div class="wbSmall">Score: <b>n/a</b></div>
-          <div class="wbSmall">Trend: <b>n/a</b></div>
-        </div>
+
+      <div style="margin-top:10px;font-size:1.65rem;font-weight:900;letter-spacing:-0.01em;color:rgba(255,255,255,0.70);">Missing data</div>
+
+      {_wb_inline_score_bar(np.nan)}
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;">
+        <div style="font-size:0.88rem;color:rgba(255,255,255,0.62);">Score: <b style="color:rgba(255,255,255,0.78);">n/a</b></div>
+        <div style="font-size:0.88rem;color:rgba(255,255,255,0.62);">Trend: <b style="color:rgba(255,255,255,0.78);">n/a</b></div>
       </div>
-      <div class="wbRef">Missing data in selected history window.</div>
+
+      <div style="font-size:0.88rem;color:rgba(255,255,255,0.62);margin-top:8px;line-height:1.25;">
+        Reference: <b style="color:rgba(255,255,255,0.78);">—</b>
+      </div>
     </div>
     """
-    st.markdown(textwrap.dedent(fragment).strip(), unsafe_allow_html=True)
-
-
+    components.html(_wb_wrap_html(inner), height=270, scrolling=False)
 
 def render_tile_grid(keys, indicators, indicator_scores, n_cols: int = 3):
     """Render wallboard tiles in a responsive Streamlit grid (no HTML grid wrappers)."""
