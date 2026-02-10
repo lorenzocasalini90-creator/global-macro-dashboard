@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
+import textwrap
 import yfinance as yf
 import requests
 import plotly.graph_objects as go
@@ -1052,7 +1053,7 @@ def wallboard_tile(key: str, series: pd.Series, indicator_scores: dict):
       </div>
     </div>
     """
-    st.markdown(fragment, unsafe_allow_html=True)
+    st.markdown(textwrap.dedent(fragment).strip(), unsafe_allow_html=True)
 
     with st.expander(f"Indicator guide — {meta['label']}", expanded=False):
         exp = meta["expander"]
@@ -1086,7 +1087,7 @@ def wallboard_missing_tile(key: str):
       <div class="wbRef">Missing data in selected history window.</div>
     </div>
     """
-    st.markdown(fragment, unsafe_allow_html=True)
+    st.markdown(textwrap.dedent(fragment).strip(), unsafe_allow_html=True)
 
 
 
