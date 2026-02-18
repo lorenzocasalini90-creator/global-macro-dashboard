@@ -26,6 +26,9 @@ ALERT_RULES = {
 
     # Trend thresholds for slow series (quarter-ish window, % move)
     "trend_slow_pct": {"warn": 1.0, "crit": 2.5},
+
+    # Regime score trend thresholds (score points)
+    "regime_trend_points": {"flat": 1.5, "notable": 4.0},
 }
 
 # ============================================================
@@ -182,7 +185,6 @@ st.markdown(
   .wbRef{ font-size: 0.88rem; color: var(--muted); margin-top: 8px; line-height: 1.2; }
   .wbMissing{ opacity: 0.85; }
 
-
   /* Score bar */
   .barWrap{
     height: 10px;
@@ -219,6 +221,21 @@ st.markdown(
   }
   .alertTitle{ font-weight: 850; color: rgba(255,255,255,0.96); margin-bottom: 6px; }
   .alertItem{ color: rgba(255,255,255,0.90); font-size: 0.95rem; margin: 4px 0; }
+
+  /* Regime trend badges */
+  .trendPill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    font-size: 0.88rem;
+    color: rgba(255,255,255,0.92);
+    white-space: nowrap;
+    font-weight: 800;
+  }
 
   code { color: rgba(255,255,255,0.88); }
 </style>
@@ -695,6 +712,45 @@ def compute_indicator_score(series: pd.Series, direction: int, scoring_mode: str
     score = (raw + 2.0) / 4.0 * 100.0
     return score, sig, latest
 
+def compute_indicator_score_asof(series: pd.Series, direction: int, scoring_mode: str, asof_ts: pd.Timestamp):
+    """
+    Same scoring philosophy, but computed at time t using only data available up to t.
+    We use the last observation <= t as the 'latest' value, and measure vs window ending at t.
+    """
+    if series is None or series.empty:
+        return np.nan
+    s = series.dropna()
+    if s.empty:
+        return np.nan
+
+    s = s[s.index <= asof_ts]
+    if s.empty or len(s) < 20:
+        return np.nan
+
+    latest = float(s.iloc[-1])
+    end = s.index.max()
+
+    if scoring_mode == "pct20y":
+        start = end - DateOffset(years=20)
+        hist = s[s.index >= start]
+        if len(hist) < 20:
+            hist = s
+        p = rolling_percentile_last(hist, latest)
+        sig = (p - 0.5) * 4.0
+    else:
+        start = end - DateOffset(years=5)
+        hist = s[s.index >= start]
+        if len(hist) < 10:
+            hist = s
+        mean = float(hist.mean())
+        std = float(hist.std())
+        sig = 0.0 if (std == 0 or np.isnan(std)) else (latest - mean) / std
+
+    raw = float(direction) * float(sig)
+    raw = float(np.clip(raw, -2.0, 2.0))
+    score = (raw + 2.0) / 4.0 * 100.0
+    return float(score)
+
 def classify_status(score: float) -> str:
     if np.isnan(score):
         return "n/a"
@@ -788,6 +844,131 @@ def score_bar_html(score: float) -> str:
     """
 
 # ============================================================
+# REGIME HISTORY (GLOBAL + BLOCKS) — weekly by default
+# ============================================================
+
+def _safe_last(series: pd.Series):
+    if series is None or series.empty:
+        return None
+    s = series.dropna()
+    if s.empty:
+        return None
+    return s.iloc[-1]
+
+@st.cache_data(ttl=3600)
+def compute_regime_history(indicators: dict, start_date: str, freq: str = "W-FRI") -> pd.DataFrame:
+    """
+    Builds a historical time series of block scores + global score by re-applying
+    the SAME scoring logic at each date t using only observations available up to t.
+
+    - freq defaults to weekly ("W-FRI") for speed + stability.
+    - returns DataFrame indexed by date with columns: GLOBAL + block keys.
+    """
+    # Determine common date range (use data availability, then trim to start_date)
+    dates = []
+    for k in INDICATOR_META.keys():
+        s = indicators.get(k, None)
+        if s is None or s.empty:
+            continue
+        ss = s.dropna()
+        if ss.empty:
+            continue
+        dates.append(ss.index.min())
+        dates.append(ss.index.max())
+    if not dates:
+        return pd.DataFrame()
+
+    start = max(pd.to_datetime(start_date), min(dates))
+    end = max(dates)
+    if pd.isna(start) or pd.isna(end) or start >= end:
+        return pd.DataFrame()
+
+    grid = pd.date_range(start=start, end=end, freq=freq)
+    if len(grid) < 8:
+        # fallback to business days if window is too short
+        grid = pd.date_range(start=start, end=end, freq="B")
+    if len(grid) < 8:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(index=grid)
+
+    # Compute indicator scores at each t (lightweight loops; weekly grid keeps fast)
+    # We compute block-level series directly to avoid storing huge indicator panel.
+    block_cols = list(BLOCKS.keys()) + ["GLOBAL"]
+    for c in block_cols:
+        out[c] = np.nan
+
+    # Pre-pull meta to avoid repeated dict access overhead
+    meta_cache = {k: INDICATOR_META[k] for k in INDICATOR_META.keys()}
+
+    # Precompute per-indicator score vectors into temp dict of lists (still small: weekly points)
+    ind_scores_at_t = {k: [] for k in INDICATOR_META.keys()}
+
+    for t in grid:
+        for ikey, meta in meta_cache.items():
+            s = indicators.get(ikey, None)
+            sc_mode = meta.get("scoring_mode", "z5y")
+            score_t = compute_indicator_score_asof(s, meta["direction"], sc_mode, t)
+            ind_scores_at_t[ikey].append(score_t)
+
+        # blocks
+        bvals = {}
+        for bkey, binfo in BLOCKS.items():
+            vals = []
+            for ikey in binfo["indicators"]:
+                v = ind_scores_at_t.get(ikey, [np.nan])[-1]
+                if not np.isnan(v):
+                    vals.append(v)
+            bscore = float(np.mean(vals)) if vals else np.nan
+            bvals[bkey] = bscore
+            out.at[t, bkey] = bscore
+
+        # global (weighted, same as live)
+        gs = 0.0
+        w_used = 0.0
+        for bkey, binfo in BLOCKS.items():
+            w = float(binfo.get("weight", 0.0))
+            if w <= 0:
+                continue
+            v = bvals.get(bkey, np.nan)
+            if np.isnan(v):
+                continue
+            gs += v * w
+            w_used += w
+        out.at[t, "GLOBAL"] = (gs / w_used) if w_used > 0 else np.nan
+
+    # Light cleanup: drop leading NaN runs
+    out = out.sort_index()
+    # keep rows where at least GLOBAL exists
+    out = out[~out["GLOBAL"].isna()]
+    return out
+
+def regime_delta(ts: pd.Series, periods: int) -> float:
+    if ts is None or ts.dropna().shape[0] < (periods + 2):
+        return np.nan
+    s = ts.dropna()
+    if len(s) <= periods:
+        return np.nan
+    return float(s.iloc[-1] - s.iloc[-1 - periods])
+
+def regime_trend_badge(delta: float, label: str) -> str:
+    if np.isnan(delta):
+        return f"<span class='trendPill'> {label}: n/a </span>"
+    flat = ALERT_RULES["regime_trend_points"]["flat"]
+    notable = ALERT_RULES["regime_trend_points"]["notable"]
+    if delta >= notable:
+        return f"<span class='trendPill' style='border-color:rgba(34,197,94,0.45);background:rgba(34,197,94,0.12);'>↑ {label}: {delta:+.1f}</span>"
+    if delta <= -notable:
+        return f"<span class='trendPill' style='border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.12);'>↓ {label}: {delta:+.1f}</span>"
+    if abs(delta) <= flat:
+        return f"<span class='trendPill' style='border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.10);'>→ {label}: {delta:+.1f}</span>"
+    # in-between
+    arrow = "↑" if delta > 0 else "↓"
+    tone = "rgba(245,158,11,0.45)"
+    bg = "rgba(245,158,11,0.10)"
+    return f"<span class='trendPill' style='border-color:{tone};background:{bg};'>{arrow} {label}: {delta:+.1f}</span>"
+
+# ============================================================
 # PLOTTING
 # ============================================================
 
@@ -813,6 +994,38 @@ def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 320
         plot_bgcolor="rgba(255,255,255,0.02)",
         xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
         yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+        showlegend=False,
+        font=dict(color="rgba(255,255,255,0.88)"),
+    )
+    return fig
+
+def plot_regime_series(ts: pd.Series, title: str, height: int = 260):
+    s = ts.dropna()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=s.index, y=s.values, mode="lines", line=dict(width=2), name=title))
+    # regime bands
+    fig.add_hrect(y0=60, y1=100, opacity=0.10, line_width=0)
+    fig.add_hrect(y0=40, y1=60, opacity=0.06, line_width=0)
+    fig.add_hrect(y0=0, y1=40, opacity=0.10, line_width=0)
+    fig.add_hline(y=60, line_width=1, line_dash="dot", opacity=0.7)
+    fig.add_hline(y=40, line_width=1, line_dash="dot", opacity=0.7)
+
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.01, y=0.98,
+        text=f"<b>{_html.escape(title)}</b>",
+        showarrow=False,
+        align="left",
+        font=dict(size=14, color="rgba(255,255,255,0.95)"),
+        bgcolor="rgba(0,0,0,0.0)"
+    )
+    fig.update_layout(
+        height=height,
+        margin=dict(l=10, r=10, t=22, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.02)",
+        xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False, range=[0, 100]),
         showlegend=False,
         font=dict(color="rgba(255,255,255,0.88)"),
     )
@@ -934,11 +1147,10 @@ def render_tile(fragment_html: str, height: int = 210):
       .wbSmall{ font-size: 0.88rem; color: var(--muted); }
       .wbFoot{ display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-top: 10px; }
 
-  .wbTop{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; }
-  .wbBarWrap{ margin-top: 10px; }
-  .wbRef{ font-size: 0.88rem; color: var(--muted); margin-top: 8px; line-height: 1.2; }
-  .wbMissing{ opacity: 0.85; }
-
+      .wbTop{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; }
+      .wbBarWrap{ margin-top: 10px; }
+      .wbRef{ font-size: 0.88rem; color: var(--muted); margin-top: 8px; line-height: 1.2; }
+      .wbMissing{ opacity: 0.85; }
 
       /* Pills */
       .pill{
@@ -1471,6 +1683,13 @@ def main():
 
     years_back = st.sidebar.slider("History (years)", 5, 30, 15)
 
+    # Regime history settings (kept conservative for speed)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Regime trend")
+    regime_freq = st.sidebar.selectbox("Regime history frequency", ["Weekly (recommended)", "Daily (heavier)"], index=0)
+    freq = "W-FRI" if regime_freq.startswith("Weekly") else "B"
+    show_regime_charts = st.sidebar.checkbox("Show regime trend charts in Deep dive", value=True)
+
     today = datetime.now(timezone.utc).date()
     start_date = (today - DateOffset(years=years_back)).date().isoformat()
     st.sidebar.markdown(f"**Start date:** {start_date}")
@@ -1572,7 +1791,7 @@ def main():
 
         indicators["gold"] = yf_map.get("GLD", pd.Series(dtype=float))
 
-    # Score indicators
+    # Score indicators (latest)
     indicator_scores = {}
     for key, meta in INDICATOR_META.items():
         series = indicators.get(key, pd.Series(dtype=float))
@@ -1586,7 +1805,7 @@ def main():
             "mode": mode
         }
 
-    # Score blocks + global
+    # Score blocks + global (latest)
     block_scores = {}
     global_score = 0.0
     w_used = 0.0
@@ -1609,6 +1828,20 @@ def main():
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
 
+    # Regime history time series (GLOBAL + blocks)
+    with st.spinner("Computing regime history (same scoring logic; frequency=" + ("weekly" if freq.startswith("W") else "daily") + ")..."):
+        regime_ts = compute_regime_history(indicators, start_date=start_date, freq=freq)
+
+    # Trend metrics from regime history
+    d4w = np.nan
+    d12w = np.nan
+    if regime_ts is not None and not regime_ts.empty and "GLOBAL" in regime_ts.columns:
+        # interpret "4w/12w" as periods (weekly) OR approx weeks (daily->business days)
+        p4 = 4 if freq.startswith("W") else 20
+        p12 = 12 if freq.startswith("W") else 60
+        d4w = regime_delta(regime_ts["GLOBAL"], p4)
+        d12w = regime_delta(regime_ts["GLOBAL"], p12)
+
     # Data freshness
     latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
     data_max_date = max(latest_points) if latest_points else None
@@ -1626,8 +1859,6 @@ def main():
     with tabs[0]:
         st.markdown("<div class='muted'>ETF-oriented macro wallboard: separates Market Thermometers (fast) vs Structural Constraints (slow), then maps to operating lines.</div>", unsafe_allow_html=True)
 
-        # Alerts are shown later (to keep key messages above the fold)
-
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
 
         market_blocks = ["price_of_time", "macro", "conditions", "plumbing"]
@@ -1642,6 +1873,10 @@ def main():
 
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
+        # Regime trend pills
+        trend_1 = regime_trend_badge(d4w, "Δ ~1M")  # weekly 4w or daily ~20d
+        trend_2 = regime_trend_badge(d12w, "Δ ~1Q")  # weekly 12w or daily ~60d
+
         st.markdown(
             f"""
             <div class="grid3">
@@ -1649,6 +1884,11 @@ def main():
                 <div class="cardTitle">Global Score (0–100) — core blocks</div>
                 <div class="cardValue">{gs_txt}</div>
                 <div class="cardSub">{pill_html(global_status)}</div>
+                <div class="cardSub">{score_bar_html(global_score)}</div>
+                <div class="cardSub" style="display:flex; gap:10px; flex-wrap:wrap;">
+                  {trend_1}
+                  {trend_2}
+                </div>
                 <div class="cardSub">
                   <b>Equity:</b> {eq_line}<br/>
                   <b>Duration:</b> {dur_line}<br/>
@@ -1696,6 +1936,10 @@ def main():
 - **Market thermometers** use a ~5Y z-score (`z5y`) → clamped to [-2,+2] → mapped to 0–100.  
 - **Structural constraints** use a ~20Y percentile (`pct20y`) → mapped to [-2,+2] → 0–100.  
 - **Thresholds:** >60 Risk-on, 40–60 Neutral, <40 Risk-off (heuristics).
+
+**Regime trend (added):**
+- Trend metrics show change in the *same* Global Score over ~1M and ~1Q (weekly by default).
+- It is a *regime momentum* read, not a forecast.
                     """.strip()
                 )
         with right:
@@ -1706,13 +1950,13 @@ def main():
                   <div class="cardSub">
                     Now: <b>{now_utc}</b><br/>
                     Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b><br/>
-                    History: <b>{years_back}y</b>
+                    History: <b>{years_back}y</b><br/>
+                    Regime history: <b>{("weekly" if freq.startswith("W") else "daily")}</b>
                   </div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
-
 
         # Alerts / data issues (kept below key tiles to preserve immediacy)
         if alerts:
@@ -1736,6 +1980,9 @@ def main():
         eq_line, dur_line, cr_line, hdg_line = operating_lines(block_scores, indicator_scores)
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
+        trend_1 = regime_trend_badge(d4w, "Δ ~1M")
+        trend_2 = regime_trend_badge(d12w, "Δ ~1Q")
+
         st.markdown(
             f"""
             <div class="grid2">
@@ -1744,6 +1991,10 @@ def main():
                 <div class="cardValue">{gs_txt}</div>
                 <div class="cardSub">{pill_html(global_status)}</div>
                 <div class="cardSub">{score_bar_html(global_score)}</div>
+                <div class="cardSub" style="display:flex; gap:10px; flex-wrap:wrap;">
+                  {trend_1}
+                  {trend_2}
+                </div>
               </div>
               <div class="card">
                 <div class="cardTitle">Operating lines (ETF)</div>
@@ -1815,6 +2066,48 @@ def main():
     with tabs[2]:
         st.markdown("## Deep dive")
         st.markdown("<div class='muted'>Full context charts. Default view shows everything. Layout: two charts per row on desktop; stacks on mobile.</div>", unsafe_allow_html=True)
+
+        # Regime trend section (GLOBAL + blocks)
+        if show_regime_charts:
+            st.markdown(
+                "<div class='section'><div class='sectionHead'><div>"
+                "<div class='sectionTitle'>Regime trend — Global & components</div>"
+                "<div class='sectionDesc'>Same scoring logic applied historically (weekly by default). "
+                "Use as regime momentum, not as a forecast.</div>"
+                "</div></div></div>",
+                unsafe_allow_html=True
+            )
+
+            if regime_ts is None or regime_ts.empty:
+                st.warning("Regime trend series unavailable (insufficient data / missing series).")
+            else:
+                # Global full-width
+                figg = plot_regime_series(regime_ts["GLOBAL"], "Global Regime Score (0–100) — history", height=320)
+                st.plotly_chart(figg, use_container_width=True, config={"displayModeBar": False}, key="regime_global")
+
+                # Blocks in grid
+                st.markdown("<div class='muted' style='margin-top:6px;'>Component blocks (0–100)</div>", unsafe_allow_html=True)
+                block_keys = [k for k in BLOCKS.keys() if k in regime_ts.columns]
+                # two-up layout
+                row = []
+                for bk in block_keys:
+                    row.append(bk)
+                    if len(row) == 2:
+                        cols = st.columns(2)
+                        for i, kk in enumerate(row):
+                            with cols[i]:
+                                nm = BLOCKS[kk]["name"]
+                                figb = plot_regime_series(regime_ts[kk], f"{nm} — history", height=260)
+                                st.plotly_chart(figb, use_container_width=True, config={"displayModeBar": False}, key=f"regime_{kk}")
+                        row = []
+                if row:
+                    cols = st.columns(2)
+                    with cols[0]:
+                        nm = BLOCKS[row[0]]["name"]
+                        figb = plot_regime_series(regime_ts[row[0]], f"{nm} — history", height=260)
+                        st.plotly_chart(figb, use_container_width=True, config={"displayModeBar": False}, key=f"regime_{row[0]}")
+                    with cols[1]:
+                        st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
 
         # A few indicators read better full-width (optional)
         full_width_indicators = {"fed_balance_sheet"}  # extend if needed
@@ -1915,7 +2208,8 @@ def main():
                     st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
 
     # ============================================================
-    # WHAT CHANGED    # ============================================================
+    # WHAT CHANGED
+    # ============================================================
     with tabs[3]:
         st.markdown("## What changed")
         st.markdown(
@@ -2055,6 +2349,12 @@ def main():
             payload_lines.append(f"    duration: \"{dur_line}\"")
             payload_lines.append(f"    credit: \"{cr_line}\"")
             payload_lines.append(f"    hedges: \"{hdg_line}\"")
+
+            # Add regime trend snapshot (optional, small and safe)
+            payload_lines.append("  regime_trend:")
+            payload_lines.append(f"    frequency: \"{('weekly' if freq.startswith('W') else 'daily')}\"")
+            payload_lines.append(f"    delta_1m_points: {0.0 if np.isnan(d4w) else round(d4w, 2)}")
+            payload_lines.append(f"    delta_1q_points: {0.0 if np.isnan(d12w) else round(d12w, 2)}")
 
             payload_lines.append("  alerts:")
             for sev, name, msg in alerts[:20]:
