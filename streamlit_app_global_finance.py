@@ -967,6 +967,91 @@ def regime_trend_badge(delta: float, label: str) -> str:
     tone = "rgba(245,158,11,0.45)"
     bg = "rgba(245,158,11,0.10)"
     return f"<span class='trendPill' style='border-color:{tone};background:{bg};'>{arrow} {label}: {delta:+.1f}</span>"
+# ============================================================
+# REGIME HISTORY (GLOBAL + BLOCKS)
+# ============================================================
+
+@st.cache_data(ttl=3600)
+def compute_regime_history(indicators: dict, start_date: str, freq: str = "W-FRI") -> pd.DataFrame:
+    """
+    Recompute block + global scores historically using the SAME scoring logic.
+    Default frequency: weekly (stable + fast).
+    """
+
+    # Determine date range
+    dates = []
+    for s in indicators.values():
+        if s is not None and not s.empty:
+            ss = s.dropna()
+            if not ss.empty:
+                dates.append(ss.index.min())
+                dates.append(ss.index.max())
+
+    if not dates:
+        return pd.DataFrame()
+
+    start = max(pd.to_datetime(start_date), min(dates))
+    end = max(dates)
+
+    grid = pd.date_range(start=start, end=end, freq=freq)
+    if len(grid) < 8:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(index=grid)
+
+    # Compute historical scores
+    for t in grid:
+        ind_scores_t = {}
+
+        for key, meta in INDICATOR_META.items():
+            s = indicators.get(key, None)
+            if s is None or s.empty:
+                ind_scores_t[key] = np.nan
+                continue
+
+            s_cut = s[s.index <= t].dropna()
+            if len(s_cut) < 20:
+                ind_scores_t[key] = np.nan
+                continue
+
+            score, _, _ = compute_indicator_score(
+                s_cut,
+                meta["direction"],
+                scoring_mode=meta.get("scoring_mode", "z5y"),
+            )
+            ind_scores_t[key] = score
+
+        # Block scores
+        block_vals = {}
+        for bkey, binfo in BLOCKS.items():
+            vals = []
+            for ikey in binfo["indicators"]:
+                v = ind_scores_t.get(ikey, np.nan)
+                if not np.isnan(v):
+                    vals.append(v)
+            block_vals[bkey] = float(np.mean(vals)) if vals else np.nan
+            out.loc[t, bkey] = block_vals[bkey]
+
+        # Global score
+        gs = 0.0
+        w_used = 0.0
+        for bkey, binfo in BLOCKS.items():
+            w = binfo["weight"]
+            if w > 0 and not np.isnan(block_vals[bkey]):
+                gs += block_vals[bkey] * w
+                w_used += w
+
+        out.loc[t, "GLOBAL"] = (gs / w_used) if w_used > 0 else np.nan
+
+    out = out.dropna(subset=["GLOBAL"])
+    return out
+
+
+def regime_delta(series: pd.Series, periods: int):
+    if series is None or len(series.dropna()) <= periods:
+        return np.nan
+    s = series.dropna()
+    return float(s.iloc[-1] - s.iloc[-1 - periods])
 
 # ============================================================
 # PLOTTING
@@ -1827,6 +1912,18 @@ def main():
     global_score = (global_score / w_used) if w_used > 0 else np.nan
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
+# ============================================================
+# REGIME HISTORY COMPUTATION
+# ============================================================
+
+regime_ts = compute_regime_history(indicators, start_date=start_date, freq="W-FRI")
+
+d1m = np.nan
+d1q = np.nan
+
+if regime_ts is not None and not regime_ts.empty:
+    d1m = regime_delta(regime_ts["GLOBAL"], 4)   # 4 weeks
+    d1q = regime_delta(regime_ts["GLOBAL"], 12)  # 12 weeks
 
     # Regime history time series (GLOBAL + blocks)
     with st.spinner("Computing regime history (same scoring logic; frequency=" + ("weekly" if freq.startswith("W") else "daily") + ")..."):
@@ -1885,6 +1982,11 @@ def main():
                 <div class="cardValue">{gs_txt}</div>
                 <div class="cardSub">{pill_html(global_status)}</div>
                 <div class="cardSub">{score_bar_html(global_score)}</div>
+                <div class="cardSub">
+                    Δ ~1M: <b>{("n/a" if np.isnan(d1m) else f"{d1m:+.1f}")}</b> ·
+                    Δ ~1Q: <b>{("n/a" if np.isnan(d1q) else f"{d1q:+.1f}")}</b>
+                    </div>
+
                 <div class="cardSub" style="display:flex; gap:10px; flex-wrap:wrap;">
                   {trend_1}
                   {trend_2}
@@ -2108,6 +2210,62 @@ def main():
                         st.plotly_chart(figb, use_container_width=True, config={"displayModeBar": False}, key=f"regime_{row[0]}")
                     with cols[1]:
                         st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
+        # ============================================================
+# REGIME TREND CHARTS
+# ============================================================
+
+st.markdown("### Regime Trend — Global & Components")
+
+if regime_ts is None or regime_ts.empty:
+    st.warning("Insufficient data for regime history.")
+else:
+    fig_global = go.Figure()
+    fig_global.add_trace(go.Scatter(
+        x=regime_ts.index,
+        y=regime_ts["GLOBAL"],
+        mode="lines",
+        line=dict(width=2),
+        name="Global Score"
+    ))
+    fig_global.add_hline(y=60, line_dash="dot")
+    fig_global.add_hline(y=40, line_dash="dot")
+    fig_global.update_layout(
+        height=320,
+        yaxis=dict(range=[0, 100]),
+        margin=dict(l=10, r=10, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.02)",
+        showlegend=False
+    )
+    st.plotly_chart(fig_global, use_container_width=True)
+
+    # Block charts (2 per row)
+    block_keys = [k for k in BLOCKS.keys() if k in regime_ts.columns]
+
+    row = []
+    for bk in block_keys:
+        row.append(bk)
+        if len(row) == 2:
+            cols = st.columns(2)
+            for i, key in enumerate(row):
+                with cols[i]:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=regime_ts.index,
+                        y=regime_ts[key],
+                        mode="lines",
+                        line=dict(width=2),
+                    ))
+                    fig.update_layout(
+                        height=260,
+                        yaxis=dict(range=[0, 100]),
+                        margin=dict(l=10, r=10, t=30, b=10),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(255,255,255,0.02)",
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            row = []
 
         # A few indicators read better full-width (optional)
         full_width_indicators = {"fed_balance_sheet"}  # extend if needed
