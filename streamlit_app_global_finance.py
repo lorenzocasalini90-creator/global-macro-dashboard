@@ -967,154 +967,7 @@ def regime_trend_badge(delta: float, label: str) -> str:
     tone = "rgba(245,158,11,0.45)"
     bg = "rgba(245,158,11,0.10)"
     return f"<span class='trendPill' style='border-color:{tone};background:{bg};'>{arrow} {label}: {delta:+.1f}</span>"
-# ============================================================
-# REGIME HISTORY (GLOBAL + BLOCKS)
-# ============================================================
 
-@st.cache_data(ttl=3600)
-def compute_regime_history(indicators: dict, start_date: str, freq: str = "W-FRI") -> pd.DataFrame:
-    """
-    Recompute block + global scores historically using the SAME scoring logic.
-    Default frequency: weekly (stable + fast).
-    """
-
-    # Determine date range
-    dates = []
-    for s in indicators.values():
-        if s is not None and not s.empty:
-            ss = s.dropna()
-            if not ss.empty:
-                dates.append(ss.index.min())
-                dates.append(ss.index.max())
-
-    if not dates:
-        return pd.DataFrame()
-
-    start = max(pd.to_datetime(start_date), min(dates))
-    end = max(dates)
-
-    grid = pd.date_range(start=start, end=end, freq=freq)
-    if len(grid) < 8:
-        return pd.DataFrame()
-
-    out = pd.DataFrame(index=grid)
-
-    # Compute historical scores
-    for t in grid:
-        ind_scores_t = {}
-
-        for key, meta in INDICATOR_META.items():
-            s = indicators.get(key, None)
-            if s is None or s.empty:
-                ind_scores_t[key] = np.nan
-                continue
-
-            s_cut = s[s.index <= t].dropna()
-            if len(s_cut) < 20:
-                ind_scores_t[key] = np.nan
-                continue
-
-            score, _, _ = compute_indicator_score(
-                s_cut,
-                meta["direction"],
-                scoring_mode=meta.get("scoring_mode", "z5y"),
-            )
-            ind_scores_t[key] = score
-
-        # Block scores
-        block_vals = {}
-        for bkey, binfo in BLOCKS.items():
-            vals = []
-            for ikey in binfo["indicators"]:
-                v = ind_scores_t.get(ikey, np.nan)
-                if not np.isnan(v):
-                    vals.append(v)
-            block_vals[bkey] = float(np.mean(vals)) if vals else np.nan
-            out.loc[t, bkey] = block_vals[bkey]
-
-        # Global score
-        gs = 0.0
-        w_used = 0.0
-        for bkey, binfo in BLOCKS.items():
-            w = binfo["weight"]
-            if w > 0 and not np.isnan(block_vals[bkey]):
-                gs += block_vals[bkey] * w
-                w_used += w
-
-        out.loc[t, "GLOBAL"] = (gs / w_used) if w_used > 0 else np.nan
-
-    out = out.dropna(subset=["GLOBAL"])
-    return out
-
-
-def regime_delta(series: pd.Series, periods: int):
-    if series is None or len(series.dropna()) <= periods:
-        return np.nan
-    s = series.dropna()
-    return float(s.iloc[-1] - s.iloc[-1 - periods])
-
-# ============================================================
-# PLOTTING
-# ============================================================
-
-def plot_premium(series: pd.Series, title: str, ref_line=None, height: int = 320):
-    s = series.dropna()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=s.index, y=s.values, mode="lines", line=dict(width=2), name=title))
-    if ref_line is not None:
-        fig.add_hline(y=float(ref_line), line_width=1, line_dash="dot", opacity=0.7)
-    fig.add_annotation(
-        xref="paper", yref="paper",
-        x=0.01, y=0.98,
-        text=f"<b>{_html.escape(title)}</b>",
-        showarrow=False,
-        align="left",
-        font=dict(size=14, color="rgba(255,255,255,0.95)"),
-        bgcolor="rgba(0,0,0,0.0)"
-    )
-    fig.update_layout(
-        height=height,
-        margin=dict(l=10, r=10, t=22, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.02)",
-        xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
-        showlegend=False,
-        font=dict(color="rgba(255,255,255,0.88)"),
-    )
-    return fig
-
-def plot_regime_series(ts: pd.Series, title: str, height: int = 260):
-    s = ts.dropna()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=s.index, y=s.values, mode="lines", line=dict(width=2), name=title))
-    # regime bands
-    fig.add_hrect(y0=60, y1=100, opacity=0.10, line_width=0)
-    fig.add_hrect(y0=40, y1=60, opacity=0.06, line_width=0)
-    fig.add_hrect(y0=0, y1=40, opacity=0.10, line_width=0)
-    fig.add_hline(y=60, line_width=1, line_dash="dot", opacity=0.7)
-    fig.add_hline(y=40, line_width=1, line_dash="dot", opacity=0.7)
-
-    fig.add_annotation(
-        xref="paper", yref="paper",
-        x=0.01, y=0.98,
-        text=f"<b>{_html.escape(title)}</b>",
-        showarrow=False,
-        align="left",
-        font=dict(size=14, color="rgba(255,255,255,0.95)"),
-        bgcolor="rgba(0,0,0,0.0)"
-    )
-    fig.update_layout(
-        height=height,
-        margin=dict(l=10, r=10, t=22, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.02)",
-        xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False, range=[0, 100]),
-        showlegend=False,
-        font=dict(color="rgba(255,255,255,0.88)"),
-    )
-    return fig
 
 # ============================================================
 # OPERATING LINES
@@ -1912,43 +1765,86 @@ def main():
     global_score = (global_score / w_used) if w_used > 0 else np.nan
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
-# ============================================================
-# REGIME HISTORY COMPUTATION
-# ============================================================
+    # ============================================================
+    # REGIME HISTORY (CLEAN VERSION — SINGLE DEFINITION)
+    # ============================================================
 
-regime_ts = compute_regime_history(indicators, start_date=start_date, freq="W-FRI")
+    @st.cache_data(ttl=3600)
+    def compute_regime_history(indicators: dict, start_date: str, freq: str = "W-FRI") -> pd.DataFrame:
 
-d1m = np.nan
-d1q = np.nan
+        dates = []
+        for s in indicators.values():
+            if s is not None and not s.empty:
+                ss = s.dropna()
+                if not ss.empty:
+                    dates.append(ss.index.min())
+                    dates.append(ss.index.max())
 
-if regime_ts is not None and not regime_ts.empty:
-    d1m = regime_delta(regime_ts["GLOBAL"], 4)   # 4 weeks
-    d1q = regime_delta(regime_ts["GLOBAL"], 12)  # 12 weeks
+        if not dates:
+            return pd.DataFrame()
 
-    # Regime history time series (GLOBAL + blocks)
-    with st.spinner("Computing regime history (same scoring logic; frequency=" + ("weekly" if freq.startswith("W") else "daily") + ")..."):
-        regime_ts = compute_regime_history(indicators, start_date=start_date, freq=freq)
+        start = max(pd.to_datetime(start_date), min(dates))
+        end = max(dates)
 
-    # Trend metrics from regime history
-    d4w = np.nan
-    d12w = np.nan
-    if regime_ts is not None and not regime_ts.empty and "GLOBAL" in regime_ts.columns:
-        # interpret "4w/12w" as periods (weekly) OR approx weeks (daily->business days)
-        p4 = 4 if freq.startswith("W") else 20
-        p12 = 12 if freq.startswith("W") else 60
-        d4w = regime_delta(regime_ts["GLOBAL"], p4)
-        d12w = regime_delta(regime_ts["GLOBAL"], p12)
+        grid = pd.date_range(start=start, end=end, freq=freq)
+        if len(grid) < 8:
+            return pd.DataFrame()
 
-    # Data freshness
-    latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
-    data_max_date = max(latest_points) if latest_points else None
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        out = pd.DataFrame(index=grid)
 
-    # Alerts (computed once)
-    alerts = build_alerts(indicators, indicator_scores)
+        for t in grid:
+            ind_scores = {}
 
-    # Tabs
-    tabs = st.tabs(["Overview", "Wallboard", "Deep dive", "What changed", "Report generation"])
+            for key, meta in INDICATOR_META.items():
+                s = indicators.get(key)
+                if s is None or s.empty:
+                    ind_scores[key] = np.nan
+                    continue
+
+                s_cut = s[s.index <= t].dropna()
+                if len(s_cut) < 20:
+                    ind_scores[key] = np.nan
+                    continue
+
+                score, _, _ = compute_indicator_score(
+                    s_cut,
+                    meta["direction"],
+                    scoring_mode=meta.get("scoring_mode", "z5y"),
+                )
+                ind_scores[key] = score
+
+            block_vals = {}
+
+            for bkey, binfo in BLOCKS.items():
+                vals = [
+                    ind_scores.get(ikey)
+                    for ikey in binfo["indicators"]
+                    if not np.isnan(ind_scores.get(ikey, np.nan))
+                ]
+                block_vals[bkey] = float(np.mean(vals)) if vals else np.nan
+                out.loc[t, bkey] = block_vals[bkey]
+
+            gs = 0.0
+            w_used = 0.0
+            for bkey, binfo in BLOCKS.items():
+                w = binfo["weight"]
+                if w > 0 and not np.isnan(block_vals[bkey]):
+                    gs += block_vals[bkey] * w
+                    w_used += w
+
+            out.loc[t, "GLOBAL"] = (gs / w_used) if w_used > 0 else np.nan
+
+        return out.dropna(subset=["GLOBAL"])
+
+
+    def regime_delta(series: pd.Series, periods: int) -> float:
+        if series is None:
+            return np.nan
+        s = series.dropna()
+        if len(s) <= periods:
+            return np.nan
+        return float(s.iloc[-1] - s.iloc[-1 - periods])
+
 
     # ============================================================
     # OVERVIEW
@@ -2030,46 +1926,46 @@ if regime_ts is not None and not regime_ts.empty:
             with st.expander("How to read Risk-on / Neutral / Risk-off (behavioral, not forecasts)", expanded=True):
                 st.markdown(
                     """
-**Risk-on:** markets price easier conditions (lower stress premia), credit behaves well, trend and risk appetite are supportive.  
-**Neutral:** mixed signals; sizing discipline matters more than directional conviction.  
-**Risk-off:** stress/tightening dominates; protect downside first (quality, liquidity, hedges).
+        **Risk-on:** markets price easier conditions (lower stress premia), credit behaves well, trend and risk appetite are supportive.  
+        **Neutral:** mixed signals; sizing discipline matters more than directional conviction.  
+        **Risk-off:** stress/tightening dominates; protect downside first (quality, liquidity, hedges).
 
-**How scores work:**  
-- **Market thermometers** use a ~5Y z-score (`z5y`) → clamped to [-2,+2] → mapped to 0–100.  
-- **Structural constraints** use a ~20Y percentile (`pct20y`) → mapped to [-2,+2] → 0–100.  
-- **Thresholds:** >60 Risk-on, 40–60 Neutral, <40 Risk-off (heuristics).
+        **How scores work:**  
+        - **Market thermometers** use a ~5Y z-score (`z5y`) → clamped to [-2,+2] → mapped to 0–100.  
+        - **Structural constraints** use a ~20Y percentile (`pct20y`) → mapped to [-2,+2] → 0–100.  
+        - **Thresholds:** >60 Risk-on, 40–60 Neutral, <40 Risk-off (heuristics).
 
-**Regime trend (added):**
-- Trend metrics show change in the *same* Global Score over ~1M and ~1Q (weekly by default).
-- It is a *regime momentum* read, not a forecast.
-                    """.strip()
-                )
-        with right:
-            st.markdown(
-                f"""
-                <div class="card">
-                  <div class="cardTitle">Data & display</div>
-                  <div class="cardSub">
-                    Now: <b>{now_utc}</b><br/>
-                    Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b><br/>
-                    History: <b>{years_back}y</b><br/>
-                    Regime history: <b>{("weekly" if freq.startswith("W") else "daily")}</b>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        **Regime trend (added):**
+        - Trend metrics show change in the *same* Global Score over ~1M and ~1Q (weekly by default).
+        - It is a *regime momentum* read, not a forecast.
+                            """.strip()
+                        )
+                with right:
+                    st.markdown(
+                        f"""
+                        <div class="card">
+                        <div class="cardTitle">Data & display</div>
+                        <div class="cardSub">
+                            Now: <b>{now_utc}</b><br/>
+                            Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b><br/>
+                            History: <b>{years_back}y</b><br/>
+                            Regime history: <b>{("weekly" if freq.startswith("W") else "daily")}</b>
+                        </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
-        # Alerts / data issues (kept below key tiles to preserve immediacy)
-        if alerts:
-            top = alerts[:10]
-            with st.expander("Alerts / data issues (click to expand)", expanded=False):
-                st.markdown("<div class='alertBox'>", unsafe_allow_html=True)
-                st.markdown("<div class='alertTitle'>⚠️ Attention (signals worth checking)</div>", unsafe_allow_html=True)
-                for sev, name, msg in top:
-                    icon = "🟥" if sev == "CRIT" else ("🟧" if sev == "WARN" else "🟦")
-                    st.markdown(f"<div class='alertItem'>{icon} <b>{_html.escape(name)}</b>: {_html.escape(msg)}</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
+                # Alerts / data issues (kept below key tiles to preserve immediacy)
+                if alerts:
+                    top = alerts[:10]
+                    with st.expander("Alerts / data issues (click to expand)", expanded=False):
+                        st.markdown("<div class='alertBox'>", unsafe_allow_html=True)
+                        st.markdown("<div class='alertTitle'>⚠️ Attention (signals worth checking)</div>", unsafe_allow_html=True)
+                        for sev, name, msg in top:
+                            icon = "🟥" if sev == "CRIT" else ("🟧" if sev == "WARN" else "🟦")
+                            st.markdown(f"<div class='alertItem'>{icon} <b>{_html.escape(name)}</b>: {_html.escape(msg)}</div>", unsafe_allow_html=True)
+                        st.markdown("</div>", unsafe_allow_html=True)
 
 
     # ============================================================
@@ -2210,160 +2106,160 @@ if regime_ts is not None and not regime_ts.empty:
                         st.plotly_chart(figb, use_container_width=True, config={"displayModeBar": False}, key=f"regime_{row[0]}")
                     with cols[1]:
                         st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
-        # ============================================================
-# REGIME TREND CHARTS
-# ============================================================
+    # ============================================================
+    # REGIME TREND CHARTS
+    # ============================================================
 
-st.markdown("### Regime Trend — Global & Components")
+    st.markdown("### Regime Trend — Global & Components")
 
-if regime_ts is None or regime_ts.empty:
-    st.warning("Insufficient data for regime history.")
-else:
-    fig_global = go.Figure()
-    fig_global.add_trace(go.Scatter(
-        x=regime_ts.index,
-        y=regime_ts["GLOBAL"],
-        mode="lines",
-        line=dict(width=2),
-        name="Global Score"
-    ))
-    fig_global.add_hline(y=60, line_dash="dot")
-    fig_global.add_hline(y=40, line_dash="dot")
-    fig_global.update_layout(
-        height=320,
-        yaxis=dict(range=[0, 100]),
-        margin=dict(l=10, r=10, t=30, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.02)",
-        showlegend=False
-    )
-    st.plotly_chart(fig_global, use_container_width=True)
+    if regime_ts is None or regime_ts.empty:
+        st.warning("Insufficient data for regime history.")
+    else:
+        fig_global = go.Figure()
+        fig_global.add_trace(go.Scatter(
+            x=regime_ts.index,
+            y=regime_ts["GLOBAL"],
+            mode="lines",
+            line=dict(width=2),
+            name="Global Score"
+        ))
+        fig_global.add_hline(y=60, line_dash="dot")
+        fig_global.add_hline(y=40, line_dash="dot")
+        fig_global.update_layout(
+            height=320,
+            yaxis=dict(range=[0, 100]),
+            margin=dict(l=10, r=10, t=30, b=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(255,255,255,0.02)",
+            showlegend=False
+        )
+        st.plotly_chart(fig_global, use_container_width=True)
 
-    # Block charts (2 per row)
-    block_keys = [k for k in BLOCKS.keys() if k in regime_ts.columns]
+        # Block charts (2 per row)
+        block_keys = [k for k in BLOCKS.keys() if k in regime_ts.columns]
 
-    row = []
-    for bk in block_keys:
-        row.append(bk)
-        if len(row) == 2:
-            cols = st.columns(2)
-            for i, key in enumerate(row):
-                with cols[i]:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=regime_ts.index,
-                        y=regime_ts[key],
-                        mode="lines",
-                        line=dict(width=2),
-                    ))
-                    fig.update_layout(
-                        height=260,
-                        yaxis=dict(range=[0, 100]),
-                        margin=dict(l=10, r=10, t=30, b=10),
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(255,255,255,0.02)",
-                        showlegend=False
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-            row = []
-
-        # A few indicators read better full-width (optional)
-        full_width_indicators = {"fed_balance_sheet"}  # extend if needed
-
-        deep_groups = [
-            ("Price of Time", "Rates and curve: the price of time and late-cycle signal.", ["real_10y", "nominal_10y", "yield_curve_10_2"]),
-            ("Macro Cycle", "Inflation and labor: policy constraint and cycle pressure.", ["breakeven_10y", "cpi_yoy", "unemployment_rate"]),
-            ("Conditions & Stress", "Fast regime: USD, credit stress, vol, trend, risk appetite.", ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]),
-            ("Liquidity / Plumbing", "System liquidity: tailwind vs drain for risk assets.", ["fed_balance_sheet", "rrp"]),
-            ("Fiscal / Policy Constraint", "Debt service, deficit dynamics, and funding constraint signal.", ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]),
-            ("External Balance & Gold", "External funding reliance + hedge demand confirmation.", ["current_account_gdp", "gold"]),
-        ]
-
-        def render_deep_panel(k: str):
-            meta = INDICATOR_META[k]
-            s = indicators.get(k, pd.Series(dtype=float))
-
-            sc = indicator_scores.get(k, {})
-            score = sc.get("score", np.nan)
-            status = sc.get("status", "n/a")
-            latest = sc.get("latest", np.nan)
-            latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
-
-            tr = recent_trend(s)
-            wlab = tr["window_label"]
-            d = tr["delta_pct"]
-            arrow = tr["arrow"]
-            d_txt = "n/a" if np.isnan(d) else f"{d:+.1f}%"
-
-            st.markdown("<div class='section'>", unsafe_allow_html=True)
-            st.markdown(
-                f"""
-                <div class="sectionHead">
-                  <div>
-                    <div class="sectionTitle">{_html.escape(meta["label"])}</div>
-                    <div class="sectionDesc">{_html.escape(meta["source"])}</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
-                      <span class="pill">Latest: <b>{_html.escape(str(latest_txt))}</b></span>
-                      {pill_html(status)}
-                      <span class="pill">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></span>
-                      <span class="pill">Trend ({_html.escape(str(wlab))}): <b>{_html.escape(str(arrow))} {_html.escape(str(d_txt))}</b></span>
-                    </div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            if s is None or s.empty:
-                st.warning("Missing data for this indicator in the selected history window.")
-            else:
-                fig = plot_premium(s, meta["label"], ref_line=meta.get("ref_line", None), height=340)
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"deep_{k}")
-
-            with st.expander("Indicator guide (definition, thresholds, why it matters)", expanded=False):
-                exp = meta["expander"]
-                st.markdown(f"**What it is:** {exp.get('what','')}")
-                st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
-                st.markdown("**How to read it:**")
-                st.markdown(exp.get("interpretation", ""))
-                st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        for gtitle, gdesc, keys in deep_groups:
-            st.markdown(
-                f"<div class='section'><div class='sectionHead'><div><div class='sectionTitle'>{_html.escape(gtitle)}</div><div class='sectionDesc'>{_html.escape(gdesc)}</div></div></div></div>",
-                unsafe_allow_html=True
-            )
-
-            # two-up layout, but allow full-width exceptions
-            row = []
-            for k in keys:
-                if k in full_width_indicators:
-                    # flush any pending row
-                    if row:
-                        cols = st.columns(2)
-                        for i, kk in enumerate(row):
-                            with cols[i]:
-                                render_deep_panel(kk)
-                        row = []
-                    render_deep_panel(k)
-                else:
-                    row.append(k)
-                    if len(row) == 2:
-                        cols = st.columns(2)
-                        for i, kk in enumerate(row):
-                            with cols[i]:
-                                render_deep_panel(kk)
-                        row = []
-            if row:
+        row = []
+        for bk in block_keys:
+            row.append(bk)
+            if len(row) == 2:
                 cols = st.columns(2)
-                with cols[0]:
-                    render_deep_panel(row[0])
-                with cols[1]:
-                    st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
+                for i, key in enumerate(row):
+                    with cols[i]:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=regime_ts.index,
+                            y=regime_ts[key],
+                            mode="lines",
+                            line=dict(width=2),
+                        ))
+                        fig.update_layout(
+                            height=260,
+                            yaxis=dict(range=[0, 100]),
+                            margin=dict(l=10, r=10, t=30, b=10),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(255,255,255,0.02)",
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                row = []
+
+            # A few indicators read better full-width (optional)
+            full_width_indicators = {"fed_balance_sheet"}  # extend if needed
+
+            deep_groups = [
+                ("Price of Time", "Rates and curve: the price of time and late-cycle signal.", ["real_10y", "nominal_10y", "yield_curve_10_2"]),
+                ("Macro Cycle", "Inflation and labor: policy constraint and cycle pressure.", ["breakeven_10y", "cpi_yoy", "unemployment_rate"]),
+                ("Conditions & Stress", "Fast regime: USD, credit stress, vol, trend, risk appetite.", ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]),
+                ("Liquidity / Plumbing", "System liquidity: tailwind vs drain for risk assets.", ["fed_balance_sheet", "rrp"]),
+                ("Fiscal / Policy Constraint", "Debt service, deficit dynamics, and funding constraint signal.", ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]),
+                ("External Balance & Gold", "External funding reliance + hedge demand confirmation.", ["current_account_gdp", "gold"]),
+            ]
+
+            def render_deep_panel(k: str):
+                meta = INDICATOR_META[k]
+                s = indicators.get(k, pd.Series(dtype=float))
+
+                sc = indicator_scores.get(k, {})
+                score = sc.get("score", np.nan)
+                status = sc.get("status", "n/a")
+                latest = sc.get("latest", np.nan)
+                latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
+
+                tr = recent_trend(s)
+                wlab = tr["window_label"]
+                d = tr["delta_pct"]
+                arrow = tr["arrow"]
+                d_txt = "n/a" if np.isnan(d) else f"{d:+.1f}%"
+
+                st.markdown("<div class='section'>", unsafe_allow_html=True)
+                st.markdown(
+                    f"""
+                    <div class="sectionHead">
+                    <div>
+                        <div class="sectionTitle">{_html.escape(meta["label"])}</div>
+                        <div class="sectionDesc">{_html.escape(meta["source"])}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                        <span class="pill">Latest: <b>{_html.escape(str(latest_txt))}</b></span>
+                        {pill_html(status)}
+                        <span class="pill">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></span>
+                        <span class="pill">Trend ({_html.escape(str(wlab))}): <b>{_html.escape(str(arrow))} {_html.escape(str(d_txt))}</b></span>
+                        </div>
+                    </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                if s is None or s.empty:
+                    st.warning("Missing data for this indicator in the selected history window.")
+                else:
+                    fig = plot_premium(s, meta["label"], ref_line=meta.get("ref_line", None), height=340)
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"deep_{k}")
+
+                with st.expander("Indicator guide (definition, thresholds, why it matters)", expanded=False):
+                    exp = meta["expander"]
+                    st.markdown(f"**What it is:** {exp.get('what','')}")
+                    st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
+                    st.markdown("**How to read it:**")
+                    st.markdown(exp.get("interpretation", ""))
+                    st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            for gtitle, gdesc, keys in deep_groups:
+                st.markdown(
+                    f"<div class='section'><div class='sectionHead'><div><div class='sectionTitle'>{_html.escape(gtitle)}</div><div class='sectionDesc'>{_html.escape(gdesc)}</div></div></div></div>",
+                    unsafe_allow_html=True
+                )
+
+                # two-up layout, but allow full-width exceptions
+                row = []
+                for k in keys:
+                    if k in full_width_indicators:
+                        # flush any pending row
+                        if row:
+                            cols = st.columns(2)
+                            for i, kk in enumerate(row):
+                                with cols[i]:
+                                    render_deep_panel(kk)
+                            row = []
+                        render_deep_panel(k)
+                    else:
+                        row.append(k)
+                        if len(row) == 2:
+                            cols = st.columns(2)
+                            for i, kk in enumerate(row):
+                                with cols[i]:
+                                    render_deep_panel(kk)
+                            row = []
+                if row:
+                    cols = st.columns(2)
+                    with cols[0]:
+                        render_deep_panel(row[0])
+                    with cols[1]:
+                        st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
 
     # ============================================================
     # WHAT CHANGED
