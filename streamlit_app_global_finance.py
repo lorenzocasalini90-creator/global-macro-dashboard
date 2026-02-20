@@ -1876,60 +1876,129 @@ def main():
 
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
-        # Regime trend pills
-        trend_1 = regime_trend_badge(d4w, "Δ ~1M")
-        trend_2 = regime_trend_badge(d12w, "Δ ~1Q")
+        # Regime trend delta strings (plain text, no HTML)
+        d1m_txt = "n/a" if np.isnan(d1m) else f"{d1m:+.1f}"
+        d1q_txt = "n/a" if np.isnan(d1q) else f"{d1q:+.1f}"
 
-        st.markdown(
-            f"""
-            <div class="grid3">
-              <div class="card">
-                <div class="cardTitle">Global Score (0–100) — core blocks</div>
-                <div class="cardValue">{gs_txt}</div>
-                <div class="cardSub">{pill_html(global_status)}</div>
-                <div class="cardSub">{score_bar_html(global_score)}</div>
-                <div class="cardSub">
-                    Δ ~1M: <b>{("n/a" if np.isnan(d1m) else f"{d1m:+.1f}")}</b> ·
-                    Δ ~1Q: <b>{("n/a" if np.isnan(d1q) else f"{d1q:+.1f}")}</b>
-                    </div>
+        # Regime trend pills — built as plain inline-style spans (no single-quotes in style values)
+        def _trend_pill_safe(delta: float, label: str) -> str:
+            """Build a trendPill span using double-quotes only, safe for st.markdown f-strings."""
+            if np.isnan(delta):
+                return (f'<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;'
+                        f'border-radius:999px;border:1px solid rgba(255,255,255,0.15);'
+                        f'background:rgba(255,255,255,0.04);font-size:0.88rem;'
+                        f'color:rgba(255,255,255,0.92);font-weight:800;white-space:nowrap;">'
+                        f'{label}: n/a</span>')
+            flat  = ALERT_RULES["regime_trend_points"]["flat"]
+            notable = ALERT_RULES["regime_trend_points"]["notable"]
+            if delta >= notable:
+                border = "rgba(34,197,94,0.45)"; bg = "rgba(34,197,94,0.12)"; arrow = "&#x2191;"
+            elif delta <= -notable:
+                border = "rgba(239,68,68,0.45)";  bg = "rgba(239,68,68,0.12)";  arrow = "&#x2193;"
+            elif abs(delta) <= flat:
+                border = "rgba(245,158,11,0.45)"; bg = "rgba(245,158,11,0.10)"; arrow = "&#x2192;"
+            elif delta > 0:
+                border = "rgba(245,158,11,0.45)"; bg = "rgba(245,158,11,0.10)"; arrow = "&#x2191;"
+            else:
+                border = "rgba(245,158,11,0.45)"; bg = "rgba(245,158,11,0.10)"; arrow = "&#x2193;"
+            return (f'<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;'
+                    f'border-radius:999px;border:1px solid {border};background:{bg};'
+                    f'font-size:0.88rem;color:rgba(255,255,255,0.92);font-weight:800;white-space:nowrap;">'
+                    f'{arrow} {label}: {delta:+.1f}</span>')
 
-                <div class="cardSub" style="display:flex; gap:10px; flex-wrap:wrap;">
-                  {trend_1}
-                  {trend_2}
-                </div>
-                <div class="cardSub">
-                  <b>Equity:</b> {eq_line}<br/>
-                  <b>Duration:</b> {dur_line}<br/>
-                  <b>Credit:</b> {cr_line}<br/>
-                  <b>Hedges:</b> {hdg_line}
-                </div>
-              </div>
+        trend_1 = _trend_pill_safe(d4w, "&#916; ~1M")
+        trend_2 = _trend_pill_safe(d12w, "&#916; ~1Q")
 
-              <div class="card">
-                <div class="cardTitle">Market Thermometers — block scorecard</div>
-                <div class="cardSub">
-                  {"<br/>".join([block_line(k) for k in market_blocks])}
-                </div>
-                <div class="cardTitle" style="margin-top:12px;">Structural Constraints — block scorecard</div>
-                <div class="cardSub">
-                  {"<br/>".join([block_line(k) for k in structural_blocks])}
-                </div>
-              </div>
+        # pill_html uses CSS classes — rebuild as inline-safe version for the grid
+        def _pill_inline(status: str) -> str:
+            if status == "risk_on":
+                c = "rgba(34,197,94,1)"; bg = "rgba(34,197,94,0.12)"; lbl = "&#x1F7E2; Risk-on"
+            elif status == "risk_off":
+                c = "rgba(239,68,68,1)";  bg = "rgba(239,68,68,0.12)";  lbl = "&#x1F534; Risk-off"
+            elif status == "neutral":
+                c = "rgba(245,158,11,1)"; bg = "rgba(245,158,11,0.12)"; lbl = "&#x1F7E1; Neutral"
+            else:
+                c = "rgba(255,255,255,0.5)"; bg = "rgba(255,255,255,0.05)"; lbl = "n/a"
+            return (f'<span style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;'
+                    f'border-radius:999px;border:1px solid {c};background:{bg};'
+                    f'font-size:0.88rem;color:rgba(255,255,255,0.94);white-space:nowrap;">'
+                    f'<span style="width:11px;height:11px;border-radius:999px;background:{c};display:inline-block;"></span>'
+                    f'{lbl}</span>')
 
-              <div class="card">
-                <div class="cardTitle">Policy / funding links (one-liners)</div>
-                <div class="cardSub">
-                  1) <b>Deficit pressure ↑ → supply pressure ↑ → term premium risk ↑</b><br/>
-                  2) <b>Debt service pressure ↑ → policy flexibility ↓</b><br/>
-                  3) <b>Term premium ↑ + USD ↑ → global tightening impulse</b><br/>
-                  4) <b>External deficit → vulnerability in USD tightening</b><br/>
-                  5) <b>Gold strength often reflects hedge demand, not growth optimism</b>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        def _bar_inline(score: float) -> str:
+            pos = 50 if np.isnan(score) else int(np.clip(score, 0, 100))
+            return (f'<div style="height:10px;border-radius:999px;background:rgba(255,255,255,0.07);'
+                    f'border:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;">'
+                    f'<div style="height:100%;border-radius:999px;background:rgba(255,255,255,0.14);width:100%;opacity:0.55;"></div>'
+                    f'<div style="position:absolute;top:-4px;left:calc({pos}% - 2px);width:3px;height:18px;'
+                    f'border-radius:2px;background:rgba(255,255,255,0.92);"></div></div>')
+
+        # Build block lines as plain HTML (no CSS class dependencies)
+        def _block_line_inline(bkey):
+            name = BLOCKS[bkey]["name"]
+            sc   = block_scores[bkey]["score"]
+            stt  = block_scores[bkey]["status"]
+            sc_txt = "n/a" if np.isnan(sc) else f"{sc:.1f}"
+            dot = {"risk_on": "🟢", "neutral": "🟡", "risk_off": "🔴"}.get(stt, "⚪")
+            lbl = {"risk_on": "Risk-on", "risk_off": "Risk-off", "neutral": "Neutral"}.get(stt, "n/a")
+            return f"{dot} {_html.escape(name)}: <b>{lbl}</b> ({sc_txt})"
+
+        mt_lines  = "<br/>".join([_block_line_inline(k) for k in market_blocks])
+        sc_lines  = "<br/>".join([_block_line_inline(k) for k in structural_blocks])
+
+        # Card style (all inline, no CSS class dependency)
+        _cs = ("background:linear-gradient(180deg,rgba(255,255,255,0.055) 0%,rgba(255,255,255,0.03) 100%);"
+               "border:1px solid rgba(255,255,255,0.10);border-radius:18px;"
+               "padding:16px 16px 14px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.25);"
+               "color:rgba(255,255,255,0.94);")
+        _ct = "font-size:0.95rem;color:rgba(255,255,255,0.70);margin-bottom:6px;"
+        _cv = "font-size:2.1rem;font-weight:800;line-height:1.05;color:rgba(255,255,255,0.94);"
+        _csub = "margin-top:8px;font-size:0.98rem;color:rgba(255,255,255,0.70);"
+
+        overview_html = f"""
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+
+  <div style="{_cs}">
+    <div style="{_ct}">Global Score (0&#8211;100) &#8212; core blocks</div>
+    <div style="{_cv}">{gs_txt}</div>
+    <div style="{_csub}">{_pill_inline(global_status)}</div>
+    <div style="margin-top:8px;">{_bar_inline(global_score)}</div>
+    <div style="{_csub}">
+      &#916; ~1M: <b>{d1m_txt}</b> &middot; &#916; ~1Q: <b>{d1q_txt}</b>
+    </div>
+    <div style="{_csub}display:flex;gap:10px;flex-wrap:wrap;">
+      {trend_1}
+      {trend_2}
+    </div>
+    <div style="{_csub}">
+      <b>Equity:</b> {_html.escape(eq_line)}<br/>
+      <b>Duration:</b> {_html.escape(dur_line)}<br/>
+      <b>Credit:</b> {_html.escape(cr_line)}<br/>
+      <b>Hedges:</b> {_html.escape(hdg_line)}
+    </div>
+  </div>
+
+  <div style="{_cs}">
+    <div style="{_ct}">Market Thermometers &#8212; block scorecard</div>
+    <div style="{_csub}">{mt_lines}</div>
+    <div style="{_ct}margin-top:12px;">Structural Constraints &#8212; block scorecard</div>
+    <div style="{_csub}">{sc_lines}</div>
+  </div>
+
+  <div style="{_cs}">
+    <div style="{_ct}">Policy / funding links (one-liners)</div>
+    <div style="{_csub}">
+      1) <b>Deficit pressure &#x2191; &#x2192; supply pressure &#x2191; &#x2192; term premium risk &#x2191;</b><br/>
+      2) <b>Debt service pressure &#x2191; &#x2192; policy flexibility &#x2193;</b><br/>
+      3) <b>Term premium &#x2191; + USD &#x2191; &#x2192; global tightening impulse</b><br/>
+      4) <b>External deficit &#x2192; vulnerability in USD tightening</b><br/>
+      5) <b>Gold strength often reflects hedge demand, not growth optimism</b>
+    </div>
+  </div>
+
+</div>
+"""
+        st.markdown(overview_html, unsafe_allow_html=True)
 
         left, right = st.columns([2, 1])
         with left:
