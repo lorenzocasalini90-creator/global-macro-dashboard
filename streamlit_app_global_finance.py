@@ -665,7 +665,7 @@ def fetch_yf_one(ticker: str, start_date: str) -> pd.Series:
         return pd.Series(dtype=float)
 
 @st.cache_data(ttl=3600)
-def fetch_yf_many(tickers: list[str], start_date: str) -> dict:
+def fetch_yf_many(tickers: list, start_date: str) -> dict:
     out = {}
     for t in tickers:
         out[t] = fetch_yf_one(t, start_date)
@@ -968,6 +968,65 @@ def regime_trend_badge(delta: float, label: str) -> str:
     bg = "rgba(245,158,11,0.10)"
     return f"<span class='trendPill' style='border-color:{tone};background:{bg};'>{arrow} {label}: {delta:+.1f}</span>"
 
+# ============================================================
+# CHART HELPERS — plot_regime_series and plot_premium
+# (FIX: these functions were missing from the original code)
+# ============================================================
+
+def plot_regime_series(ts: pd.Series, title: str, height: int = 320) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=ts.index,
+        y=ts.values,
+        mode="lines",
+        line=dict(color="rgba(244,63,94,0.85)", width=2),
+        name=title,
+    ))
+    fig.add_hline(y=60, line_dash="dot", line_color="rgba(34,197,94,0.55)",
+                  annotation_text="60", annotation_position="left")
+    fig.add_hline(y=40, line_dash="dot", line_color="rgba(239,68,68,0.55)",
+                  annotation_text="40", annotation_position="left")
+    fig.add_hline(y=50, line_dash="dash", line_color="rgba(255,255,255,0.15)")
+    fig.update_layout(
+        title=dict(text=title, font=dict(color="rgba(255,255,255,0.88)", size=13)),
+        height=height,
+        margin=dict(l=10, r=10, t=36, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.02)",
+        yaxis=dict(range=[0, 100], gridcolor="rgba(255,255,255,0.06)", color="rgba(255,255,255,0.60)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.04)", color="rgba(255,255,255,0.60)"),
+        showlegend=False,
+    )
+    return fig
+
+def plot_premium(series: pd.Series, label: str, ref_line=None, height: int = 340) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=series.index,
+        y=series.values,
+        mode="lines",
+        line=dict(color="rgba(244,63,94,0.85)", width=2),
+        name=label,
+    ))
+    if ref_line is not None:
+        fig.add_hline(
+            y=ref_line,
+            line_dash="dot",
+            line_color="rgba(255,255,255,0.35)",
+            annotation_text=str(ref_line),
+            annotation_position="left",
+        )
+    fig.update_layout(
+        title=dict(text=label, font=dict(color="rgba(255,255,255,0.88)", size=13)),
+        height=height,
+        margin=dict(l=10, r=10, t=36, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.02)",
+        yaxis=dict(gridcolor="rgba(255,255,255,0.06)", color="rgba(255,255,255,0.60)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.04)", color="rgba(255,255,255,0.60)"),
+        showlegend=False,
+    )
+    return fig
 
 # ============================================================
 # OPERATING LINES
@@ -1152,7 +1211,7 @@ def render_tile(fragment_html: str, height: int = 210):
 
 def _wb_inline_pill(status: str) -> str:
     status_l = (status or "").lower()
-    if "risk-on" in status_l or "on" == status_l:
+    if "risk_on" in status_l or status_l == "on":
         color = "rgba(34,197,94,1)"
         bg = "rgba(34,197,94,0.12)"
         label = "Risk-on"
@@ -1439,7 +1498,7 @@ internally consistent across time.
 
 Each analytical block must include:
 
-a short “What it captures” explanation (if specified),
+a short "What it captures" explanation (if specified),
 
 a one-liner,
 
@@ -1509,7 +1568,7 @@ You must generate the report using this exact structure and headings:
 
 [Insert current date]
 
-How to Read This Report: What “Risk-On / Neutral / Risk-Off” Really Means
+How to Read This Report: What "Risk-On / Neutral / Risk-Off" Really Means
 
 (Define regimes as behavioral pricing regimes, not forecasts.)
 
@@ -1765,86 +1824,37 @@ def main():
     global_score = (global_score / w_used) if w_used > 0 else np.nan
     global_status = classify_status(global_score)
     block_scores["GLOBAL"] = {"score": global_score, "status": global_status}
+
     # ============================================================
-    # REGIME HISTORY (CLEAN VERSION — SINGLE DEFINITION)
+    # REGIME HISTORY COMPUTATION
+    # (FIX: moved inside main() — was incorrectly at module level)
     # ============================================================
+    with st.spinner("Computing regime history (same scoring logic; frequency=" + ("weekly" if freq.startswith("W") else "daily") + ")..."):
+        regime_ts = compute_regime_history(indicators, start_date=start_date, freq=freq)
 
-    @st.cache_data(ttl=3600)
-    def compute_regime_history(indicators: dict, start_date: str, freq: str = "W-FRI") -> pd.DataFrame:
+    # Trend metrics from regime history
+    d4w = np.nan
+    d12w = np.nan
+    if regime_ts is not None and not regime_ts.empty and "GLOBAL" in regime_ts.columns:
+        p4 = 4 if freq.startswith("W") else 20
+        p12 = 12 if freq.startswith("W") else 60
+        d4w = regime_delta(regime_ts["GLOBAL"], p4)
+        d12w = regime_delta(regime_ts["GLOBAL"], p12)
 
-        dates = []
-        for s in indicators.values():
-            if s is not None and not s.empty:
-                ss = s.dropna()
-                if not ss.empty:
-                    dates.append(ss.index.min())
-                    dates.append(ss.index.max())
+    # Keep d1m / d1q as aliases for overview card
+    d1m = d4w
+    d1q = d12w
 
-        if not dates:
-            return pd.DataFrame()
+    # Data freshness
+    latest_points = [s.index.max() for s in indicators.values() if s is not None and not s.empty]
+    data_max_date = max(latest_points) if latest_points else None
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-        start = max(pd.to_datetime(start_date), min(dates))
-        end = max(dates)
+    # Alerts (computed once)
+    alerts = build_alerts(indicators, indicator_scores)
 
-        grid = pd.date_range(start=start, end=end, freq=freq)
-        if len(grid) < 8:
-            return pd.DataFrame()
-
-        out = pd.DataFrame(index=grid)
-
-        for t in grid:
-            ind_scores = {}
-
-            for key, meta in INDICATOR_META.items():
-                s = indicators.get(key)
-                if s is None or s.empty:
-                    ind_scores[key] = np.nan
-                    continue
-
-                s_cut = s[s.index <= t].dropna()
-                if len(s_cut) < 20:
-                    ind_scores[key] = np.nan
-                    continue
-
-                score, _, _ = compute_indicator_score(
-                    s_cut,
-                    meta["direction"],
-                    scoring_mode=meta.get("scoring_mode", "z5y"),
-                )
-                ind_scores[key] = score
-
-            block_vals = {}
-
-            for bkey, binfo in BLOCKS.items():
-                vals = [
-                    ind_scores.get(ikey)
-                    for ikey in binfo["indicators"]
-                    if not np.isnan(ind_scores.get(ikey, np.nan))
-                ]
-                block_vals[bkey] = float(np.mean(vals)) if vals else np.nan
-                out.loc[t, bkey] = block_vals[bkey]
-
-            gs = 0.0
-            w_used = 0.0
-            for bkey, binfo in BLOCKS.items():
-                w = binfo["weight"]
-                if w > 0 and not np.isnan(block_vals[bkey]):
-                    gs += block_vals[bkey] * w
-                    w_used += w
-
-            out.loc[t, "GLOBAL"] = (gs / w_used) if w_used > 0 else np.nan
-
-        return out.dropna(subset=["GLOBAL"])
-
-
-    def regime_delta(series: pd.Series, periods: int) -> float:
-        if series is None:
-            return np.nan
-        s = series.dropna()
-        if len(s) <= periods:
-            return np.nan
-        return float(s.iloc[-1] - s.iloc[-1 - periods])
-
+    # Tabs
+    tabs = st.tabs(["Overview", "Wallboard", "Deep dive", "What changed", "Report generation"])
 
     # ============================================================
     # OVERVIEW
@@ -1867,8 +1877,8 @@ def main():
         gs_txt = "n/a" if np.isnan(global_score) else f"{global_score:.1f}"
 
         # Regime trend pills
-        trend_1 = regime_trend_badge(d4w, "Δ ~1M")  # weekly 4w or daily ~20d
-        trend_2 = regime_trend_badge(d12w, "Δ ~1Q")  # weekly 12w or daily ~60d
+        trend_1 = regime_trend_badge(d4w, "Δ ~1M")
+        trend_2 = regime_trend_badge(d12w, "Δ ~1Q")
 
         st.markdown(
             f"""
@@ -1926,47 +1936,46 @@ def main():
             with st.expander("How to read Risk-on / Neutral / Risk-off (behavioral, not forecasts)", expanded=True):
                 st.markdown(
                     """
-        **Risk-on:** markets price easier conditions (lower stress premia), credit behaves well, trend and risk appetite are supportive.  
-        **Neutral:** mixed signals; sizing discipline matters more than directional conviction.  
-        **Risk-off:** stress/tightening dominates; protect downside first (quality, liquidity, hedges).
+**Risk-on:** markets price easier conditions (lower stress premia), credit behaves well, trend and risk appetite are supportive.  
+**Neutral:** mixed signals; sizing discipline matters more than directional conviction.  
+**Risk-off:** stress/tightening dominates; protect downside first (quality, liquidity, hedges).
 
-        **How scores work:**  
-        - **Market thermometers** use a ~5Y z-score (`z5y`) → clamped to [-2,+2] → mapped to 0–100.  
-        - **Structural constraints** use a ~20Y percentile (`pct20y`) → mapped to [-2,+2] → 0–100.  
-        - **Thresholds:** >60 Risk-on, 40–60 Neutral, <40 Risk-off (heuristics).
+**How scores work:**  
+- **Market thermometers** use a ~5Y z-score (`z5y`) → clamped to [-2,+2] → mapped to 0–100.  
+- **Structural constraints** use a ~20Y percentile (`pct20y`) → mapped to [-2,+2] → 0–100.  
+- **Thresholds:** >60 Risk-on, 40–60 Neutral, <40 Risk-off (heuristics).
 
-        **Regime trend (added):**
-        - Trend metrics show change in the *same* Global Score over ~1M and ~1Q (weekly by default).
-        - It is a *regime momentum* read, not a forecast.
-                            """.strip()
-                        )
-                with right:
-                    st.markdown(
-                        f"""
-                        <div class="card">
-                        <div class="cardTitle">Data & display</div>
-                        <div class="cardSub">
-                            Now: <b>{now_utc}</b><br/>
-                            Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b><br/>
-                            History: <b>{years_back}y</b><br/>
-                            Regime history: <b>{("weekly" if freq.startswith("W") else "daily")}</b>
-                        </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+**Regime trend (added):**
+- Trend metrics show change in the *same* Global Score over ~1M and ~1Q (weekly by default).
+- It is a *regime momentum* read, not a forecast.
+                    """.strip()
+                )
+        with right:
+            st.markdown(
+                f"""
+                <div class="card">
+                  <div class="cardTitle">Data & display</div>
+                  <div class="cardSub">
+                    Now: <b>{now_utc}</b><br/>
+                    Latest datapoint: <b>{('n/a' if data_max_date is None else str(pd.to_datetime(data_max_date).date()))}</b><br/>
+                    History: <b>{years_back}y</b><br/>
+                    Regime history: <b>{("weekly" if freq.startswith("W") else "daily")}</b>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-                # Alerts / data issues (kept below key tiles to preserve immediacy)
-                if alerts:
-                    top = alerts[:10]
-                    with st.expander("Alerts / data issues (click to expand)", expanded=False):
-                        st.markdown("<div class='alertBox'>", unsafe_allow_html=True)
-                        st.markdown("<div class='alertTitle'>⚠️ Attention (signals worth checking)</div>", unsafe_allow_html=True)
-                        for sev, name, msg in top:
-                            icon = "🟥" if sev == "CRIT" else ("🟧" if sev == "WARN" else "🟦")
-                            st.markdown(f"<div class='alertItem'>{icon} <b>{_html.escape(name)}</b>: {_html.escape(msg)}</div>", unsafe_allow_html=True)
-                        st.markdown("</div>", unsafe_allow_html=True)
-
+        # Alerts / data issues
+        if alerts:
+            top = alerts[:10]
+            with st.expander("Alerts / data issues (click to expand)", expanded=False):
+                st.markdown("<div class='alertBox'>", unsafe_allow_html=True)
+                st.markdown("<div class='alertTitle'>⚠️ Attention (signals worth checking)</div>", unsafe_allow_html=True)
+                for sev, name, msg in top:
+                    icon = "🟥" if sev == "CRIT" else ("🟧" if sev == "WARN" else "🟦")
+                    st.markdown(f"<div class='alertItem'>{icon} <b>{_html.escape(name)}</b>: {_html.escape(msg)}</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
     # ============================================================
     # WALLBOARD
@@ -2033,7 +2042,6 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Expand/collapse menus for groups (your “menu a tendina” request)
         with st.expander("Market Thermometers", expanded=True):
             groups_mt = [
                 ("Price of Time", "Rates and curve: the price of time and late-cycle signal.", ["real_10y", "nominal_10y", "yield_curve_10_2"]),
@@ -2060,6 +2068,9 @@ def main():
 
     # ============================================================
     # DEEP DIVE
+    # (FIX: render_deep_panel, deep_groups and full block chart loop
+    #  were incorrectly indented inside the regime block chart for-loop.
+    #  They are now correctly at the top level of with tabs[2].)
     # ============================================================
     with tabs[2]:
         st.markdown("## Deep dive")
@@ -2106,160 +2117,104 @@ def main():
                         st.plotly_chart(figb, use_container_width=True, config={"displayModeBar": False}, key=f"regime_{row[0]}")
                     with cols[1]:
                         st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
-    # ============================================================
-    # REGIME TREND CHARTS
-    # ============================================================
 
-    st.markdown("### Regime Trend — Global & Components")
+        # A few indicators read better full-width (optional)
+        full_width_indicators = {"fed_balance_sheet"}  # extend if needed
 
-    if regime_ts is None or regime_ts.empty:
-        st.warning("Insufficient data for regime history.")
-    else:
-        fig_global = go.Figure()
-        fig_global.add_trace(go.Scatter(
-            x=regime_ts.index,
-            y=regime_ts["GLOBAL"],
-            mode="lines",
-            line=dict(width=2),
-            name="Global Score"
-        ))
-        fig_global.add_hline(y=60, line_dash="dot")
-        fig_global.add_hline(y=40, line_dash="dot")
-        fig_global.update_layout(
-            height=320,
-            yaxis=dict(range=[0, 100]),
-            margin=dict(l=10, r=10, t=30, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(255,255,255,0.02)",
-            showlegend=False
-        )
-        st.plotly_chart(fig_global, use_container_width=True)
+        deep_groups = [
+            ("Price of Time", "Rates and curve: the price of time and late-cycle signal.", ["real_10y", "nominal_10y", "yield_curve_10_2"]),
+            ("Macro Cycle", "Inflation and labor: policy constraint and cycle pressure.", ["breakeven_10y", "cpi_yoy", "unemployment_rate"]),
+            ("Conditions & Stress", "Fast regime: USD, credit stress, vol, trend, risk appetite.", ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]),
+            ("Liquidity / Plumbing", "System liquidity: tailwind vs drain for risk assets.", ["fed_balance_sheet", "rrp"]),
+            ("Fiscal / Policy Constraint", "Debt service, deficit dynamics, and funding constraint signal.", ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]),
+            ("External Balance & Gold", "External funding reliance + hedge demand confirmation.", ["current_account_gdp", "gold"]),
+        ]
 
-        # Block charts (2 per row)
-        block_keys = [k for k in BLOCKS.keys() if k in regime_ts.columns]
+        def render_deep_panel(k: str):
+            meta = INDICATOR_META[k]
+            s = indicators.get(k, pd.Series(dtype=float))
 
-        row = []
-        for bk in block_keys:
-            row.append(bk)
-            if len(row) == 2:
-                cols = st.columns(2)
-                for i, key in enumerate(row):
-                    with cols[i]:
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=regime_ts.index,
-                            y=regime_ts[key],
-                            mode="lines",
-                            line=dict(width=2),
-                        ))
-                        fig.update_layout(
-                            height=260,
-                            yaxis=dict(range=[0, 100]),
-                            margin=dict(l=10, r=10, t=30, b=10),
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            plot_bgcolor="rgba(255,255,255,0.02)",
-                            showlegend=False
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                row = []
+            sc = indicator_scores.get(k, {})
+            score = sc.get("score", np.nan)
+            status = sc.get("status", "n/a")
+            latest = sc.get("latest", np.nan)
+            latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
 
-            # A few indicators read better full-width (optional)
-            full_width_indicators = {"fed_balance_sheet"}  # extend if needed
+            tr = recent_trend(s)
+            wlab = tr["window_label"]
+            d = tr["delta_pct"]
+            arrow = tr["arrow"]
+            d_txt = "n/a" if np.isnan(d) else f"{d:+.1f}%"
 
-            deep_groups = [
-                ("Price of Time", "Rates and curve: the price of time and late-cycle signal.", ["real_10y", "nominal_10y", "yield_curve_10_2"]),
-                ("Macro Cycle", "Inflation and labor: policy constraint and cycle pressure.", ["breakeven_10y", "cpi_yoy", "unemployment_rate"]),
-                ("Conditions & Stress", "Fast regime: USD, credit stress, vol, trend, risk appetite.", ["usd_index", "hy_oas", "vix", "spy_trend", "hyg_lqd_ratio"]),
-                ("Liquidity / Plumbing", "System liquidity: tailwind vs drain for risk assets.", ["fed_balance_sheet", "rrp"]),
-                ("Fiscal / Policy Constraint", "Debt service, deficit dynamics, and funding constraint signal.", ["interest_to_receipts", "deficit_gdp", "term_premium_10y", "interest_payments", "federal_receipts"]),
-                ("External Balance & Gold", "External funding reliance + hedge demand confirmation.", ["current_account_gdp", "gold"]),
-            ]
-
-            def render_deep_panel(k: str):
-                meta = INDICATOR_META[k]
-                s = indicators.get(k, pd.Series(dtype=float))
-
-                sc = indicator_scores.get(k, {})
-                score = sc.get("score", np.nan)
-                status = sc.get("status", "n/a")
-                latest = sc.get("latest", np.nan)
-                latest_txt = fmt_value(latest, meta["unit"], meta.get("scale", 1.0))
-
-                tr = recent_trend(s)
-                wlab = tr["window_label"]
-                d = tr["delta_pct"]
-                arrow = tr["arrow"]
-                d_txt = "n/a" if np.isnan(d) else f"{d:+.1f}%"
-
-                st.markdown("<div class='section'>", unsafe_allow_html=True)
-                st.markdown(
-                    f"""
-                    <div class="sectionHead">
-                    <div>
-                        <div class="sectionTitle">{_html.escape(meta["label"])}</div>
-                        <div class="sectionDesc">{_html.escape(meta["source"])}</div>
+            st.markdown("<div class='section'>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="sectionHead">
+                  <div>
+                    <div class="sectionTitle">{_html.escape(meta["label"])}</div>
+                    <div class="sectionDesc">{_html.escape(meta["source"])}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                      <span class="pill">Latest: <b>{_html.escape(str(latest_txt))}</b></span>
+                      {pill_html(status)}
+                      <span class="pill">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></span>
+                      <span class="pill">Trend ({_html.escape(str(wlab))}): <b>{_html.escape(str(arrow))} {_html.escape(str(d_txt))}</b></span>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
-                        <span class="pill">Latest: <b>{_html.escape(str(latest_txt))}</b></span>
-                        {pill_html(status)}
-                        <span class="pill">Score: <b>{("n/a" if np.isnan(score) else f"{score:.0f}")}</b></span>
-                        <span class="pill">Trend ({_html.escape(str(wlab))}): <b>{_html.escape(str(arrow))} {_html.escape(str(d_txt))}</b></span>
-                        </div>
-                    </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-                if s is None or s.empty:
-                    st.warning("Missing data for this indicator in the selected history window.")
+            if s is None or s.empty:
+                st.warning("Missing data for this indicator in the selected history window.")
+            else:
+                fig = plot_premium(s, meta["label"], ref_line=meta.get("ref_line", None), height=340)
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"deep_{k}")
+
+            with st.expander("Indicator guide (definition, thresholds, why it matters)", expanded=False):
+                exp = meta["expander"]
+                st.markdown(f"**What it is:** {exp.get('what','')}")
+                st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
+                st.markdown("**How to read it:**")
+                st.markdown(exp.get("interpretation", ""))
+                st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        for gtitle, gdesc, keys in deep_groups:
+            st.markdown(
+                f"<div class='section'><div class='sectionHead'><div><div class='sectionTitle'>{_html.escape(gtitle)}</div><div class='sectionDesc'>{_html.escape(gdesc)}</div></div></div></div>",
+                unsafe_allow_html=True
+            )
+
+            # two-up layout, but allow full-width exceptions
+            row = []
+            for k in keys:
+                if k in full_width_indicators:
+                    # flush any pending row
+                    if row:
+                        cols = st.columns(2)
+                        for i, kk in enumerate(row):
+                            with cols[i]:
+                                render_deep_panel(kk)
+                        row = []
+                    render_deep_panel(k)
                 else:
-                    fig = plot_premium(s, meta["label"], ref_line=meta.get("ref_line", None), height=340)
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"deep_{k}")
-
-                with st.expander("Indicator guide (definition, thresholds, why it matters)", expanded=False):
-                    exp = meta["expander"]
-                    st.markdown(f"**What it is:** {exp.get('what','')}")
-                    st.markdown(f"**Reference levels / thresholds:** {exp.get('reference','')}")
-                    st.markdown("**How to read it:**")
-                    st.markdown(exp.get("interpretation", ""))
-                    st.markdown(f"**Why it matters (policy/funding link):** {exp.get('bridge','')}")
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            for gtitle, gdesc, keys in deep_groups:
-                st.markdown(
-                    f"<div class='section'><div class='sectionHead'><div><div class='sectionTitle'>{_html.escape(gtitle)}</div><div class='sectionDesc'>{_html.escape(gdesc)}</div></div></div></div>",
-                    unsafe_allow_html=True
-                )
-
-                # two-up layout, but allow full-width exceptions
-                row = []
-                for k in keys:
-                    if k in full_width_indicators:
-                        # flush any pending row
-                        if row:
-                            cols = st.columns(2)
-                            for i, kk in enumerate(row):
-                                with cols[i]:
-                                    render_deep_panel(kk)
-                            row = []
-                        render_deep_panel(k)
-                    else:
-                        row.append(k)
-                        if len(row) == 2:
-                            cols = st.columns(2)
-                            for i, kk in enumerate(row):
-                                with cols[i]:
-                                    render_deep_panel(kk)
-                            row = []
-                if row:
-                    cols = st.columns(2)
-                    with cols[0]:
-                        render_deep_panel(row[0])
-                    with cols[1]:
-                        st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
+                    row.append(k)
+                    if len(row) == 2:
+                        cols = st.columns(2)
+                        for i, kk in enumerate(row):
+                            with cols[i]:
+                                render_deep_panel(kk)
+                        row = []
+            if row:
+                cols = st.columns(2)
+                with cols[0]:
+                    render_deep_panel(row[0])
+                with cols[1]:
+                    st.markdown("<div class='card' style='opacity:0.0; height:10px;'></div>", unsafe_allow_html=True)
 
     # ============================================================
     # WHAT CHANGED
@@ -2337,13 +2292,14 @@ def main():
                 st.markdown("### Singled out (HOT / WATCH)")
                 for _, r in hot_df.iterrows():
                     badge = "🔥 HOT" if r["Hotlist"] == "HOT" else "👀 WATCH"
+                    trend_pct_str = "n/a" if pd.isna(r["TrendPct"]) else f"{float(r['TrendPct']):+.2f}%"
                     st.markdown(
                         f"""
                         <div class="card" style="margin-bottom:10px;">
                           <div class="cardTitle">{_html.escape(badge)} — {_html.escape(r["Indicator"])}</div>
                           <div class="cardSub">
                             Regime: <b>{_html.escape(r["Regime"])}</b> · Score: <b>{r["Score"]}</b> ·
-                            Trend: <b>{("n/a" if pd.isna(r["TrendPct"]) else f"{float(r['TrendPct']):+.2f}%")}</b> ·
+                            Trend: <b>{_html.escape(trend_pct_str)}</b> ·
                             Attention: <b>{r["Attention"]:.2f}</b>
                           </div>
                         </div>
@@ -2404,7 +2360,7 @@ def main():
             payload_lines.append(f"    credit: \"{cr_line}\"")
             payload_lines.append(f"    hedges: \"{hdg_line}\"")
 
-            # Add regime trend snapshot (optional, small and safe)
+            # Add regime trend snapshot
             payload_lines.append("  regime_trend:")
             payload_lines.append(f"    frequency: \"{('weekly' if freq.startswith('W') else 'daily')}\"")
             payload_lines.append(f"    delta_1m_points: {0.0 if np.isnan(d4w) else round(d4w, 2)}")
@@ -2453,6 +2409,7 @@ def main():
 
             st.code(one_shot, language="markdown")
             st.caption("Tip: paste the entire block into a new chat. The model should follow the prompt, then read the YAML payload.")
+
 
 if __name__ == "__main__":
     main()
